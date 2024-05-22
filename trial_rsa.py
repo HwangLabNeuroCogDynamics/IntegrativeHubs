@@ -12,6 +12,7 @@ from nilearn.maskers import NiftiLabelsMasker
 ################################
 ## Calculate trial level RSA. use Argon
 ################################
+included_subjects = input()
 
 
 def compute_inv_shrunk_covariance(x):
@@ -52,7 +53,7 @@ if __name__ == "__main__":
     ## relevant paths
     mask_dir = "/Shared/lss_kahwang_hpc/ROIs/"
     data_dr = "/Shared/lss_kahwang_hpc/data/ThalHi/3dDeconvolve_fdpt4/"
-
+    out_dir = "/Shared/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/"
 
     sub_df = pd.read_csv(data_dr + "usable_subjs.csv")
 
@@ -66,14 +67,18 @@ if __name__ == "__main__":
     mask_data = mask.get_fdata()
     print("mask shape ", mask_data.shape)
     
-    num_trials = 408
-    num_ROIs = len(np.unique(mask_data))
+    #num_trials = 408
     num_subs = len(np.unique(sub_df['sub']))
 
-    sub_x_roi_x_coeff = np.zeros((num_subs, num_ROIs,num_trials,num_trials))
+    #sub_x_roi_x_coeff = np.zeros((num_subs, num_ROIs,num_trials,num_trials))
 
-    for j, s in enumerate(sub_df['sub']):
+    for s in [included_subjects]:
         
+        #load LSS data
+        print("\nloading LSS for subject ", s)
+        cur_lss_nii = nib.load( os.path.join(data_dr, ("sub-%s" %s),  ("cue.LSS.nii.gz")) )
+        num_trials = int(cur_lss_nii.shape[3]/2)
+
         #load errts file
         print("\nloading errts for subjects ", s)
         errts = nib.load(os.path.join(data_dr, ("sub-%s" %s), ("sub-%s_FIRmodel_errts_8cues2resp.nii.gz" %s)))
@@ -98,19 +103,18 @@ if __name__ == "__main__":
         # cortical_data = cortical_mask0.get_fdata()
 
         # -- now modify mask to exclude zeros
-        mask_binary=np.where(np.logical_and(mask_data>0,voxels_to_exclude==0),1,0) # make sure to also exclude voxels with all zeros
+        mask_binary=np.where(np.logical_and(mask_data>0,voxels_to_exclude==0),1.0,0) # make sure to also exclude voxels with all zeros
         print("number of usable voxels in current ROI mask:",mask_binary.sum(),"\n")
         ROI_binary_mask=nilearn.image.new_img_like(mask, mask_binary) # ...new_img_like(ref_niimg, data, ...)
 
         #apply mask to do something
         mask_vec = nilearn.masking.apply_mask(mask, ROI_binary_mask) # will be 1D (voxels)
+        num_ROIs = len(np.unique(mask_vec))
+
         residual_2D = nilearn.masking.apply_mask(errts, ROI_binary_mask) # will be [time x voxels]
         #remove censored TRs, did Steph miss this step?
         residual_2D = residual_2D[np.sum(residual_2D, axis=1)!=0]
-       
-        #load LSS data
-        print("\nloading LSS for subject ", s)
-        cur_lss_nii = nib.load( os.path.join(data_dr, ("sub-%s" %s),  ("cue.LSS.nii.gz")) )
+    
         # -- reduce LSS data to just amplitude information and then convert back to nii format
         # LSS data dim 4 set up like ...
         # [amplitude_trial_0, derivative_trial_0, amplitude_trial_1, derivative_trial_1, ...]
@@ -122,8 +126,8 @@ if __name__ == "__main__":
         
         # -- mask LSS data to make it faster to loop through rois
         lss_2D = nilearn.masking.apply_mask(cur_lss_amp_nii, ROI_binary_mask) # will be [trials x voxels]
-        if lss_2D.shape[0] == num_trials:
-            lss_2D = lss_2D.T # flip so that order is [voxels x trials]
+        #if lss_2D.shape[0] == num_trials:
+        lss_2D = lss_2D.T # flip so that order is [voxels x trials]
         
         # now calculate the ROI by trial by trial similarity matrix.
         roi_x_coeff = np.zeros((num_ROIs,num_trials,num_trials))
@@ -168,7 +172,11 @@ if __name__ == "__main__":
                 # -- add coefficient matrix to ROI by coefficient matrix array
                 roi_x_coeff[i,:,:] = coeff_mat
 
-        sub_x_roi_x_coeff[j,:,:,:] = roi_x_coeff
+        #sub_x_roi_x_coeff[j,:,:,:] = roi_x_coeff
+        #save output
+        np.save(out_dir+"%s_morel_coef.npy" %s, roi_x_coeff)
+        
+        
         ### the next step is regression onto RSA models...
 
             
