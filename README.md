@@ -1,2 +1,2 @@
 # IntegrativeHubs
-Code the calculate integrative properties
+Code for calculating integrative properties. Network hubs and representation integration.
