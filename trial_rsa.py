@@ -114,6 +114,8 @@ if __name__ == "__main__":
         residual_2D = nilearn.masking.apply_mask(errts, ROI_binary_mask) # will be [time x voxels]
         #remove censored TRs, did Steph miss this step?
         residual_2D = residual_2D[np.sum(residual_2D, axis=1)!=0]
+        del errts
+        del errts_data
     
         # -- reduce LSS data to just amplitude information and then convert back to nii format
         # LSS data dim 4 set up like ...
@@ -128,6 +130,7 @@ if __name__ == "__main__":
         lss_2D = nilearn.masking.apply_mask(cur_lss_amp_nii, ROI_binary_mask) # will be [trials x voxels]
         #if lss_2D.shape[0] == num_trials:
         lss_2D = lss_2D.T # flip so that order is [voxels x trials]
+        del cur_lss_data
         
         # now calculate the ROI by trial by trial similarity matrix.
         roi_x_coeff = np.zeros((num_ROIs,num_trials,num_trials))
@@ -176,14 +179,9 @@ if __name__ == "__main__":
         #save output
         np.save(out_dir+"%s_morel_coef.npy" %s, roi_x_coeff)
         
-        
         ### the next step is regression onto RSA models...
-
-            
 
     now = datetime.now()
     print("End time: ", now)
-
-
 
 # end
