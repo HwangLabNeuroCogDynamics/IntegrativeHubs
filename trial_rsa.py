@@ -54,13 +54,13 @@ if __name__ == "__main__":
     mask_dir = "/Shared/lss_kahwang_hpc/ROIs/"
     data_dr = "/Shared/lss_kahwang_hpc/data/ThalHi/3dDeconvolve_fdpt4/"
     out_dir = "/Shared/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/"
-
+    roi_fn = "whole_brain"
     sub_df = pd.read_csv(data_dr + "usable_subjs.csv")
 
     # ROIs 
-    ROI_mask = "Morel_2.5_labels.nii.gz"
+    ROI_mask = "Schaefer400+Morel+BG_2.5.nii.gz" #"Morel_2.5_labels.nii.gz"
 
-    ##for now just testing this with Morel thalamus mask
+    ##
     mask_file = os.path.join(mask_dir, ROI_mask)
     print("\n\nPulling mask file from ... ", mask_file)
     mask = nib.load(mask_file)
@@ -177,7 +177,7 @@ if __name__ == "__main__":
 
         #sub_x_roi_x_coeff[j,:,:,:] = roi_x_coeff
         #save output
-        np.save(out_dir+"%s_morel_coef.npy" %s, roi_x_coeff)
+        np.save(out_dir+"coefs/%s_%s_coef.npy" %(s, roi_fn), roi_x_coeff)
         
         ### the next step is regression onto RSA models...
 

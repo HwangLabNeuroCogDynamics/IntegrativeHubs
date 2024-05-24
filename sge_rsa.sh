@@ -3,10 +3,10 @@
 #$ -o /Users/kahwang/sge_logs
 #$ -e /Users/kahwang/sge_logs
 #$ -q SEASHORE
-#$ -l mem_free=10G
+#$ -l mem_free=20G
 #$ -t 1-59
-#$ -tc 20
-#$ -pe smp 4
+#$ -tc 10
+#$ -pe smp 10
 ##### 1-4740
 #!/bin/bash
 source activate py3.8
@@ -19,3 +19,4 @@ echo ${sub}
 
 #### run script
 echo $sub | python /Users/kahwang/bin/IntegrativeHubs/trial_rsa.py
+echo $sub | python /Users/kahwang/bin/IntegrativeHubs/trial_regression.py
