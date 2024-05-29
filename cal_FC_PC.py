@@ -57,24 +57,24 @@ def write_graph_to_vol_yeo_template_nifti(graph_metric, fn, roisize=400):
 
 
 
-sub_df = pd.read_csv("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/3dDeconvolve_fdpt4/censor_percentage_by_subjs.csv")
-del_subs = []
-for ij, sub in enumerate(sub_df['sub']):
-	isExist = os.path.exists("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/3dDeconvolve_fdpt4/sub-%s/sub-%s_FIRmodel_errts_8cues2resp.nii.gz" %(sub, sub))
-	if not isExist:
-		del_subs.append(ij)
-sub_df = sub_df.drop(del_subs)
-sub_df.to_csv("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/3dDeconvolve_fdpt4/usable_subjs.csv")
-
+# sub_df = pd.read_csv("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/3dDeconvolve_fdpt4/censor_percentage_by_subjs.csv")
+# del_subs = []
+# for ij, sub in enumerate(sub_df['sub']):
+# 	isExist = os.path.exists("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/3dDeconvolve_fdpt4/sub-%s/sub-%s_FIRmodel_errts_8cues2resp.nii.gz" %(sub, sub))
+# 	if not isExist:
+# 		del_subs.append(ij)
+# sub_df = sub_df.drop(del_subs)
+# sub_df.to_csv("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/3dDeconvolve_fdpt4/usable_subjs.csv")
 
 if __name__ == "__main__":
 
 	### global variables, masks, files, etc.
 	# load masks
 	sub_df = pd.read_csv("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/3dDeconvolve_fdpt4/usable_subjs.csv")
-	Schaefer400_mask = nib.load('/home/kahwang/bsh/ROIs/Schaefer400_7network_2mm.nii.gz')
-	cortex_masker = NiftiLabelsMasker(labels_img='/home/kahwang/bsh/ROIs/Schaefer400_7network_2mm.nii.gz', standardize=False)
-	Schaeffer_CI = np.loadtxt('/home/kahwang/bin/LesionNetwork/Schaeffer400_7network_CI')
+	Schaefer400_mask = nib.load("/mnt/nfs/lss/lss_kahwang_hpc/ROIs/Schaefer400+Morel+BG_2.5.nii.gz")
+	#nib.load('/home/kahwang/bsh/ROIs/Schaefer400_7network_2mm.nii.gz')
+	cortex_masker = NiftiLabelsMasker(labels_img=Schaefer400_mask, standardize=False)
+	Schaeffer_CI = np.loadtxt('/mnt/nfs/lss/lss_kahwang_hpc/ROIs/Schaeffer400_7network_CI')
 
 
 	## thalamus stuff for the future

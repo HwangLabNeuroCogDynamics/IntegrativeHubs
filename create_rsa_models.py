@@ -34,22 +34,20 @@ for s in subjects:
         if isinstance(sdf.iloc[i].version, str):
             if sdf.iloc[i]['Texture'] == 'Donut':
                 rel_feature = 'Shape'
-                feature_model[i,:] = 1*(sdf[rel_feature].values == sdf.iloc[i][rel_feature])  
+                feature_model[i,:] = 1*((sdf[rel_feature].values == sdf.iloc[i][rel_feature])  & (sdf['Texture'].values == 'Donut'))  
                 
             if sdf.iloc[i]['Texture'] == 'Filled':
                 rel_feature = 'Color'
-                feature_model[i,:] = 1*(sdf[rel_feature].values == sdf.iloc[i][rel_feature]) 
+                feature_model[i,:] = 1*((sdf[rel_feature].values == sdf.iloc[i][rel_feature]) & (sdf['Texture'].values == 'Filled')) 
 
         else:
             if sdf.iloc[i]['Texture'] == 'Donut':
                 rel_feature = 'Color'
-                feature_model[i,:] = 1*(sdf[rel_feature].values == sdf.iloc[i][rel_feature])  
-                #& (sdf['Texture'].values == 'Donut'))
+                feature_model[i,:] = 1*((sdf[rel_feature].values == sdf.iloc[i][rel_feature])  & (sdf['Texture'].values == 'Donut'))
                 
             if sdf.iloc[i]['Texture'] == 'Filled':
                 rel_feature = 'Shape'
-                feature_model[i,:] = 1*(sdf[rel_feature].values == sdf.iloc[i][rel_feature]) 
-                #& (sdf['Texture'].values == 'Filled'))
+                feature_model[i,:] = 1*((sdf[rel_feature].values == sdf.iloc[i][rel_feature]) & (sdf['Texture'].values == 'Filled'))
 
 
     np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_context_model.npy" %s, context_model)
