@@ -5,12 +5,13 @@ from datetime import datetime
 import seaborn as sns
 import matplotlib.pyplot as plt
 import statsmodels.formula.api as smf
+import scipy.linalg as linalg
 
 ################################
 ## Fit RSA model to similarity matrices. use Argon
 ################################
 included_subjects = input()
-
+permute = True
 
 if __name__ == "__main__":
 
@@ -49,9 +50,39 @@ if __name__ == "__main__":
         for m in models:
             regressors[m] = np.load(data_dir + "models/" + "%s_%s_model.npy" %(s, m))
 
-        # fit model ROI by ROI
         num_ROIs = coef.shape[0]
+        
+        # if running permutation
+        if permute:
 
+            # permute_results = {}
+            # for m in models:
+            #     permute_results[m] = np.zeros((num_ROIs, 1000))
+            df = pd.DataFrame()
+            for m in models:
+                df[m] = regressors[m].flatten()[lower_triangle_usable_inds]
+            X = df[['context', 'task', 'response', 'feature']]
+            X = np.column_stack((np.ones(len(X)), X))
+            permuted_results = np.zeros((num_ROIs, 5,1000)) #5 ind vars, intercept, context, task, response, feature
+
+            for p in np.arange(1000):
+
+                print("now permutation number: ", p+1)
+                Y = coef.reshape(coef.shape[0],-1)[:,lower_triangle_usable_inds]
+                Y = Y.T
+
+                #permute X
+                np.random.seed(p)
+                random_inds = np.random.permutation(X.shape[0])
+                permuted_X =X[random_inds, :]
+                
+                #run regression, use scipy to fit to all ROIs at once
+                permuted_results[:,:,p], _, _, _ = linalg.lstsq(Y, permuted_X)
+           
+            #save output
+            np.save(out_dir + "%s_%s_permutated_stats.npy" %(s, coef_fn), permuted_results)
+
+        #else:
         results = []
         for r in np.arange(num_ROIs):
             print("now running ROI number: ", r+1)
@@ -62,7 +93,7 @@ if __name__ == "__main__":
                 df[m] = regressors[m].flatten()[lower_triangle_usable_inds]
 
             #run regression
-            model = smf.ols(formula="coef ~ 1 + context + color + shape + stim + task + response + feature", data=df).fit()
+            model = smf.ols(formula="coef ~ 1 + context + task + response + feature", data=df).fit()
             #print(model.summary())
             tdf = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0].rename(columns={'P>|t|': 'pvalue'}).rename(columns={'index': 'parameter'})
             tdf['sub'] = s
@@ -71,6 +102,9 @@ if __name__ == "__main__":
             results.append(tdf)
         results_df = pd.concat(results, ignore_index=True)    
         results_df.to_csv(out_dir + "%s_%s_stats.csv" %(s, coef_fn))       
+
+        # note, I have compared sm.ols and linalg.lstsq, they gave the same results
+
 
     now = datetime.now()
     print("End time: ", now)
