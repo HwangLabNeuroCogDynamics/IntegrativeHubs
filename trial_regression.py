@@ -11,7 +11,7 @@ import scipy.linalg as linalg
 ## Fit RSA model to similarity matrices. use Argon
 ################################
 included_subjects = input()
-permute = True
+permute = False
 
 if __name__ == "__main__":
 
@@ -45,7 +45,7 @@ if __name__ == "__main__":
         print("number of usable cells from the trial by trial matrix: ", len(lower_triangle_usable_inds))
 
         # load models
-        models = ["context", "color", "shape", "task", "stim", "response", "feature"]
+        models = ["context", "color", "shape", "task", "response", "stim"]
         regressors = {}
         for m in models:
             regressors[m] = np.load(data_dir + "models/" + "%s_%s_model.npy" %(s, m))
@@ -60,24 +60,34 @@ if __name__ == "__main__":
             #     permute_results[m] = np.zeros((num_ROIs, 1000))
             df = pd.DataFrame()
             for m in models:
-                df[m] = regressors[m].flatten()[lower_triangle_usable_inds]
-            X = df[['context', 'task', 'response', 'feature']]
+                df[m] = regressors[m].flatten()[lower_triangle_usable_inds] - regressors[m].flatten()[lower_triangle_usable_inds].mean() 
+            
+            # create interactions
+            df["context:color"] = df["context"] * df["color"]
+            df["context:shape"] = df["context"] * df["shape"]
+            df["context:color:shape"] = df["context"] * df["shape"] *df["color"]
+
+            X = df[['context', 'task', 'response', 'color', 'shape',  "stim", 'context:color', 'context:shape', 'context:color:shape']]
             X = np.column_stack((np.ones(len(X)), X))
-            permuted_results = np.zeros((num_ROIs, 5,1000)) #5 ind vars, intercept, context, task, response, feature
+            permuted_results = np.zeros((num_ROIs, 10,1000)) 
 
             for p in np.arange(1000):
 
                 print("now permutation number: ", p+1)
                 Y = coef.reshape(coef.shape[0],-1)[:,lower_triangle_usable_inds]
                 Y = Y.T
-
+                Y[np.isnan(Y)] = np.nanmean(Y)
+                
                 #permute X
                 np.random.seed(p)
                 random_inds = np.random.permutation(X.shape[0])
                 permuted_X =X[random_inds, :]
                 
                 #run regression, use scipy to fit to all ROIs at once
-                permuted_results[:,:,p], _, _, _ = linalg.lstsq(Y, permuted_X)
+                try:
+                    permuted_results[:,:,p], _, _, _ = linalg.lstsq(Y, permuted_X)
+                except:
+                    permuted_results[:,:,p] = np.nan
            
             #save output
             np.save(out_dir + "%s_%s_permutated_stats.npy" %(s, coef_fn), permuted_results)
@@ -90,10 +100,10 @@ if __name__ == "__main__":
             df = pd.DataFrame()
             df['coef'] = coef[r].flatten()[lower_triangle_usable_inds]
             for m in models:
-                df[m] = regressors[m].flatten()[lower_triangle_usable_inds]
+                df[m] = regressors[m].flatten()[lower_triangle_usable_inds] - regressors[m].flatten()[lower_triangle_usable_inds].mean() 
 
             #run regression
-            model = smf.ols(formula="coef ~ 1 + context + task + response + feature", data=df).fit()
+            model = smf.ols(formula="coef ~ 1 + context + task + response + color + shape + stim + context:color + context:shape + context:color:shape", data=df).fit()
             #print(model.summary())
             tdf = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0].rename(columns={'P>|t|': 'pvalue'}).rename(columns={'index': 'parameter'})
             tdf['sub'] = s
