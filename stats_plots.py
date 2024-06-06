@@ -18,12 +18,14 @@ from scipy.stats import ttest_1samp
 data_dir =  '/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/'
 subjects = pd.read_csv("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/3dDeconvolve_fdpt4/usable_subjs.csv")['sub']
 roi_fn = "whole_brain"
-models = ["context", "color", "shape", "task", "stim", "response", "feature"]
+models = ['color', 'context', 'context:color',
+       'context:color:shape',  'context:shape',
+        'response', 'shape', 'task', 'stim']
 
 
 ### check null distribution
 
-nulls = np.zeros((59,418,5,1000)) #sub by roi by var by permutations
+nulls = np.zeros((59,418,9,1000)) #sub by roi by var by permutations
 for i, s in enumerate(subjects):
     nulls[i,:,:,:] = np.load("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/%s_whole_brain_permutated_stats.npy" %s)
 
@@ -90,7 +92,6 @@ def write_stats_to_vol_yeo_template_nifti(graph_metric, fn, roisize = 418):
 	new_nii = nib.Nifti1Image(graph_data, affine = vol_template.affine, header = vol_template.header)
 	nib.save(new_nii, fn)
 
-models = ["context", "color", "shape", "task", "stim", "response", "feature"]
 for m in models:
     fn = '/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/niis/%s_t-statistic.nii.gz' %m
     write_stats_to_vol_yeo_template_nifti(stats_df.loc[stats_df['model']== m]['t-statistic'].values, fn, roisize = 418)

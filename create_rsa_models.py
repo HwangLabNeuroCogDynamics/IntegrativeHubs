@@ -22,6 +22,11 @@ for s in subjects:
     response_model = np.zeros((num_trials, num_trials))
     stim_model = np.zeros((num_trials, num_trials))
     feature_model = np.zeros((num_trials, num_trials))
+    identity_model = np.zeros((num_trials, num_trials))
+    EDS_model = np.zeros((num_trials, num_trials)) 
+    IDS_model = np.zeros((num_trials, num_trials)) 
+    Stay_model = np.zeros((num_trials, num_trials)) 
+    condition_model = np.zeros((num_trials, num_trials))
 
     for i in np.arange(num_trials):
         context_model[i,:] = 1*(sdf['Texture'].values == sdf.iloc[i]['Texture'])
@@ -30,6 +35,11 @@ for s in subjects:
         task_model[i,:] = 1*(sdf['Task'].values == sdf.iloc[i]['Task'])
         response_model[i,:] = 1*(sdf['Subject_Respo'].values == sdf.iloc[i]['Subject_Respo'])
         stim_model[i,:] = 1*(sdf['pic'].values == sdf.iloc[i]['pic'])
+        identity_model[i,:] = 1*(sdf['cue'].values == sdf.iloc[i]['cue'])
+        EDS_model[i,:] = 1*(sdf['Trial_type'].values == "EDS")
+        IDS_model[i,:] = 1*(sdf['Trial_type'].values == "IDS")
+        Stay_model[i,:] = 1*(sdf['Trial_type'].values == "Stay")
+        condition_model[i,:] = 1*(sdf['Trial_type'].values == sdf.iloc[i]['Trial_type'])
 
         if isinstance(sdf.iloc[i].version, str):
             if sdf.iloc[i]['Texture'] == 'Donut':
@@ -57,3 +67,9 @@ for s in subjects:
     np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_response_model.npy" %s, response_model)
     np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_stim_model.npy" %s, stim_model)
     np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_feature_model.npy" %s, feature_model)
+    
+    np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_identity_model.npy" %s, identity_model)
+    np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_EDS_model.npy" %s, EDS_model)
+    np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_IDS_model.npy" %s, IDS_model)
+    np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_Stay_model.npy" %s, Stay_model)
+    np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_condition_model.npy" %s, condition_model)    
