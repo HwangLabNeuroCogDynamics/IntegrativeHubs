@@ -12,15 +12,31 @@ import matplotlib.pyplot as plt
 import statsmodels.formula.api as smf
 from scipy.stats import ttest_1samp
 
+def write_stats_to_vol_yeo_template_nifti(graph_metric, fn, roisize = 418):
+	'''short hand to write vol based nifti file of the stats
+	, voxels in each parcel will be replaced with the stats'''
+
+
+	vol_template = nib.load('/mnt/nfs/lss/lss_kahwang_hpc/ROIs/Schaefer400+Morel+BG_2.5.nii.gz')
+	v_data = vol_template.get_fdata()
+	graph_data = np.zeros((np.shape(v_data)))
+
+	for i in np.arange(roisize):
+		graph_data[v_data == i+1] = graph_metric[i]
+
+	new_nii = nib.Nifti1Image(graph_data, affine = vol_template.affine, header = vol_template.header)
+	nib.save(new_nii, fn)
 
 ### run group level stats and make niis or plots
 
 data_dir =  '/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/'
 subjects = pd.read_csv("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/3dDeconvolve_fdpt4/usable_subjs.csv")['sub']
 roi_fn = "whole_brain"
-models = ['color', 'context', 'context:color',
-       'context:color:shape',  'context:shape',
-        'response', 'shape', 'task', 'stim']
+models = ['color', 'context', 'shape',
+       'context:color:shape',
+        'response',  'task', 'stim',
+        'EDS', 'IDS', 'condition',
+        'context:EDS', 'shape:IDS', 'color:IDS']
 
 
 ### check null distribution
@@ -76,21 +92,6 @@ stats_df = pd.concat(stats, ignore_index=True)
 stats_df.to_csv('/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/group_stats.csv')
 
 ### create nii images
-
-def write_stats_to_vol_yeo_template_nifti(graph_metric, fn, roisize = 418):
-	'''short hand to write vol based nifti file of the stats
-	, voxels in each parcel will be replaced with the stats'''
-
-
-	vol_template = nib.load('/mnt/nfs/lss/lss_kahwang_hpc/ROIs/Schaefer400+Morel+BG_2.5.nii.gz')
-	v_data = vol_template.get_fdata()
-	graph_data = np.zeros((np.shape(v_data)))
-
-	for i in np.arange(roisize):
-		graph_data[v_data == i+1] = graph_metric[i]
-
-	new_nii = nib.Nifti1Image(graph_data, affine = vol_template.affine, header = vol_template.header)
-	nib.save(new_nii, fn)
 
 for m in models:
     fn = '/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/niis/%s_t-statistic.nii.gz' %m

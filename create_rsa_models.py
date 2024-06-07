@@ -27,6 +27,8 @@ for s in subjects:
     IDS_model = np.zeros((num_trials, num_trials)) 
     Stay_model = np.zeros((num_trials, num_trials)) 
     condition_model = np.zeros((num_trials, num_trials))
+    error_model = np.zeros((num_trials, num_trials))
+    identity_model = np.zeros((num_trials, num_trials))
 
     for i in np.arange(num_trials):
         context_model[i,:] = 1*(sdf['Texture'].values == sdf.iloc[i]['Texture'])
@@ -40,8 +42,10 @@ for s in subjects:
         IDS_model[i,:] = 1*(sdf['Trial_type'].values == "IDS")
         Stay_model[i,:] = 1*(sdf['Trial_type'].values == "Stay")
         condition_model[i,:] = 1*(sdf['Trial_type'].values == sdf.iloc[i]['Trial_type'])
+        error_model[i,:] = 1*(sdf['trial_Corr'].values != 1)
+        identity_model[i,:] = 1*(sdf['cue'].values == sdf.iloc[i]['cue'] )
 
-        if isinstance(sdf.iloc[i].version, str):
+        if isinstance(sdf.iloc[i].version, str): # this is the swap version of subjects, DSFC
             if sdf.iloc[i]['Texture'] == 'Donut':
                 rel_feature = 'Shape'
                 feature_model[i,:] = 1*((sdf[rel_feature].values == sdf.iloc[i][rel_feature])  & (sdf['Texture'].values == 'Donut'))  
@@ -50,7 +54,7 @@ for s in subjects:
                 rel_feature = 'Color'
                 feature_model[i,:] = 1*((sdf[rel_feature].values == sdf.iloc[i][rel_feature]) & (sdf['Texture'].values == 'Filled')) 
 
-        else:
+        else: # these are DCFS version subjects
             if sdf.iloc[i]['Texture'] == 'Donut':
                 rel_feature = 'Color'
                 feature_model[i,:] = 1*((sdf[rel_feature].values == sdf.iloc[i][rel_feature])  & (sdf['Texture'].values == 'Donut'))
@@ -73,3 +77,8 @@ for s in subjects:
     np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_IDS_model.npy" %s, IDS_model)
     np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_Stay_model.npy" %s, Stay_model)
     np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_condition_model.npy" %s, condition_model)    
+    np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_error_model.npy" %s, error_model)    
+    np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_identity_model.npy" %s, identity_model) 
+
+
+# end
