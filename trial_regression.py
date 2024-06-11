@@ -5,25 +5,31 @@ from datetime import datetime
 import seaborn as sns
 import matplotlib.pyplot as plt
 import statsmodels.formula.api as smf
+from statsmodels.stats.outliers_influence import variance_inflation_factor
 import scipy.linalg as linalg
 
 ################################
 ## Fit RSA model to similarity matrices. use Argon
 ################################
 included_subjects = input()
-permute = False
 
 if __name__ == "__main__":
 
     now = datetime.now()
     print("Start time: ", now)
-    
+    permute = True
+
     #### setup
     ## relevant paths
     data_dir = "/Shared/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/"
     out_dir = "/Shared/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/"
     coef_fn = 'whole_brain'
-    
+    model_syntax = ["coef ~ 1 + context + task + response + color + shape + stim + identity + EDS + IDS + condition + error" +
+                    "+ context:color + context:shape + context:EDS + context:IDS + task:EDS + task:IDS + feature:EDS + feature:IDS" + 
+                    "+ context:EDS:error + context:IDS:error + feature:EDS:error + feature:IDS:error" + 
+                    "+ task:EDS:error + task:IDS:error + task:error"]
+    num_permutations = 4096
+
     for s in [included_subjects]:
         print("now running subject: ", s)
 
@@ -45,7 +51,7 @@ if __name__ == "__main__":
         print("number of usable cells from the trial by trial matrix: ", len(lower_triangle_usable_inds))
 
         # load models
-        models = ["context", "color", "shape", "task", "response", "stim"]
+        models = ["context", "color", "shape", "task", "response", "stim", "EDS", "IDS", "condition", "feature", "error", "identity"]
         regressors = {}
         for m in models:
             regressors[m] = np.load(data_dir + "models/" + "%s_%s_model.npy" %(s, m))
@@ -59,19 +65,25 @@ if __name__ == "__main__":
             # for m in models:
             #     permute_results[m] = np.zeros((num_ROIs, 1000))
             df = pd.DataFrame()
+            df['coef'] = coef[r].flatten()[lower_triangle_usable_inds]
             for m in models:
                 df[m] = regressors[m].flatten()[lower_triangle_usable_inds] - regressors[m].flatten()[lower_triangle_usable_inds].mean() 
             
             # create interactions
-            df["context:color"] = df["context"] * df["color"]
-            df["context:shape"] = df["context"] * df["shape"]
-            df["context:color:shape"] = df["context"] * df["shape"] *df["color"]
+            #df["context:color"] = df["context"] * df["color"]
+            #df["context:shape"] = df["context"] * df["shape"]
+            #df["context:color:shape"] = df["context"] * df["shape"] *df["color"]
+            # df["context:EDS"] = df["context"] * df["EDS"]
+            # df["color:IDS"] = df["color"] * df["IDS"]
+            # df["shape:IDS"] = df["shape"] * df["IDS"]
+            #X = df[['context', 'task', 'response', 'color', 'shape',  "stim", 'EDS', 'IDS', 'condition', 'context:EDS', 'color:IDS', 'shape:IDS']]
+            #X = np.column_stack((np.ones(len(X)), X))
+            
+            model = smf.ols(formula = model_syntax[0], data=df)
+            X = model.exog
+            permuted_results = np.zeros((num_ROIs, X.shape[1],num_permutations)) 
 
-            X = df[['context', 'task', 'response', 'color', 'shape',  "stim", 'context:color', 'context:shape', 'context:color:shape']]
-            X = np.column_stack((np.ones(len(X)), X))
-            permuted_results = np.zeros((num_ROIs, 10,1000)) 
-
-            for p in np.arange(1000):
+            for p in np.arange(num_permutations):
 
                 print("now permutation number: ", p+1)
                 Y = coef.reshape(coef.shape[0],-1)[:,lower_triangle_usable_inds]
@@ -103,8 +115,11 @@ if __name__ == "__main__":
                 df[m] = regressors[m].flatten()[lower_triangle_usable_inds] - regressors[m].flatten()[lower_triangle_usable_inds].mean() 
 
             #run regression
-            model = smf.ols(formula="coef ~ 1 + context + task + response + color + shape + stim + context:color + context:shape + context:color:shape", data=df).fit()
+            model = smf.ols(formula = model_syntax[0], data=df).fit()
+            
             #print(model.summary())
+            #variance_inflation_factor(df, 0)
+             
             tdf = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0].rename(columns={'P>|t|': 'pvalue'}).rename(columns={'index': 'parameter'})
             tdf['sub'] = s
             tdf['ROI'] = r +1
@@ -112,9 +127,7 @@ if __name__ == "__main__":
             results.append(tdf)
         results_df = pd.concat(results, ignore_index=True)    
         results_df.to_csv(out_dir + "%s_%s_stats.csv" %(s, coef_fn))       
-
         # note, I have compared sm.ols and linalg.lstsq, they gave the same results
-
 
     now = datetime.now()
     print("End time: ", now)
