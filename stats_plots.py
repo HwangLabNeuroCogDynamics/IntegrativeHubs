@@ -11,6 +11,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import statsmodels.formula.api as smf
 from scipy.stats import ttest_1samp
+plt.ion()
 
 def write_stats_to_vol_yeo_template_nifti(graph_metric, fn, roisize = 418):
 	'''short hand to write vol based nifti file of the stats
@@ -25,55 +26,57 @@ def write_stats_to_vol_yeo_template_nifti(graph_metric, fn, roisize = 418):
 		graph_data[v_data == i+1] = graph_metric[i]
 
 	new_nii = nib.Nifti1Image(graph_data, affine = vol_template.affine, header = vol_template.header)
-	nib.save(new_nii, fn)
+	nib.save(new_nii, fn) 
+	return new_nii
 
 ### run group level stats and make niis or plots
 
 data_dir =  '/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/'
 subjects = pd.read_csv("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/3dDeconvolve_fdpt4/usable_subjs.csv")['sub']
 roi_fn = "whole_brain"
-models = ['color', 'context', 'shape',
-       'context:color:shape',
-        'response',  'task', 'stim',
-        'EDS', 'IDS', 'condition',
-        'context:EDS', 'shape:IDS', 'color:IDS']
 
+results = []
+for s in subjects:
+    results.append(pd.read_csv(data_dir +"%s_%s_stats.csv" %(s, roi_fn)))
+results_df = pd.concat(results, ignore_index=True)
+
+models = results_df.parameter.unique()
+# models = ['EDS', 'IDS', 'Intercept', 'color', 'condition', 'context',
+#        'context:EDS', 'context:EDS:error', 'context:IDS', 'context:color',
+#        'context:shape', 'error', 'feature:EDS', 'feature:IDS',
+#        'feature:IDS:error', 'identity', 'response', 'shape', 'stim',
+#        'task', 'task:EDS', 'task:IDS']
 
 ### check null distribution
-
-nulls = np.zeros((59,418,9,1000)) #sub by roi by var by permutations
+nulls = np.zeros((59,418,len(models),4096)) #sub by roi by var by permutations
 for i, s in enumerate(subjects):
     nulls[i,:,:,:] = np.load("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/%s_whole_brain_permutated_stats.npy" %s)
 
-mean_null = np.mean(nulls, axis = (0))
-
 # Convert to DataFrame
+mean_null = np.mean(nulls, axis = (0))
 df = pd.DataFrame(mean_null[:,4,:].T)  # Transpose to have 1000 rows and 418 columns
 
 # Overlapping histograms with transparency
 plt.figure(figsize=(12, 8))
 for col in df.columns:
     sns.histplot(df[col], bins=30, kde=False, alpha=0.3)
-
 plt.show()
 
-# plt.figure(figsize=(12, 8))
-# for i in range(mean_null.shape[0]):
-#     plt.hist(mean_null[i,1, :], bins=30, alpha=0.3, color='blue', edgecolor='black')
+t_nulls = np.zeros((418,len(models),4096))
+for p in np.arange(4096):
+     for r in np.arange(418):
+          for v in np.arange(len(models)):
+               t_nulls[r,v,p], _= ttest_1samp(nulls[:,r,v,p], 0)
 
-# # plt.title('Histograms of 418 Distributions')
-# # plt.xlabel('Value')
-# # plt.ylabel('Frequency')
-# plt.show()
+
+df = pd.DataFrame(t_nulls[:,9,:].T) 
+plt.figure(figsize=(12, 8))
+for col in np.arange(415,418):
+    sns.histplot(df[col], bins=30, kde=False, alpha=0.3)
+plt.show()
+## remarkbly, the 97.5 percentile of the null seems to be around t=2. But with some diff between ROIs, so perhaps ROI specific null is a good idea.
 
 ### run stats
-
-results = []
-for s in subjects:
-    results.append(pd.read_csv(data_dir +"%s_%s_stats.csv" %(s, roi_fn)))
-
-results_df = pd.concat(results, ignore_index=True)
-
 stats = []
 for r in results_df.ROI.unique():
     for m in models:
@@ -89,12 +92,65 @@ for r in results_df.ROI.unique():
         })
         stats.append(ttdf)    
 stats_df = pd.concat(stats, ignore_index=True)
+
+# FDR correction
+from statsmodels.stats.multitest import fdrcorrection
+stats_df['q'] = fdrcorrection(stats_df['p-value'])[1]
 stats_df.to_csv('/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/group_stats.csv')
 
 ### create nii images
-
 for m in models:
     fn = '/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/niis/%s_t-statistic.nii.gz' %m
-    write_stats_to_vol_yeo_template_nifti(stats_df.loc[stats_df['model']== m]['t-statistic'].values, fn, roisize = 418)
-      
+    metric = stats_df.loc[stats_df['model']== m]['t-statistic'].values
+    mask = 1
+    write_stats_to_vol_yeo_template_nifti(metric * mask, fn, roisize = 418)
+
+# create thresholded nii images      
+thres_niis = {}
+for m in models:
+    fn = '/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/niis/%s_t-statistic_thresholded.nii.gz' %m
+    metric = stats_df.loc[stats_df['model']== m]['t-statistic'].values
+    mask = stats_df.loc[stats_df['model']== m]['q'].values < .05
+    thres_niis[m] = write_stats_to_vol_yeo_template_nifti(metric * mask, fn, roisize = 418)
+
+
+### use nilearn plotting to visualize results
+
+from nilearn import datasets
+from nilearn import surface
+fsaverage = datasets.fetch_surf_fsaverage()
+curv_right = surface.load_surf_data(fsaverage.curv_right)
+curv_right_sign = np.sign(curv_right)
+texture = surface.vol_to_surf(thres_niis['context'], fsaverage.pial_right)
+
+from nilearn import plotting
+
+fig = plotting.plot_surf_stat_map(
+    fsaverage.infl_right, texture, hemi='right',
+    title='Surface right hemisphere', colorbar=True,
+    threshold=1, bg_map=curv_right_sign,
+)
+fig.show()
+
+plotting.plot_glass_brain(thres_niis['context'], display_mode='lzry', plot_abs=False,
+                          title='Context', threshold=0.1)
+plt.show()
+
+
+## plot PC
+pc_img = nib.load("/home/kahwang/bin/IntegrativeHubs/data/pc_vectors.nii.gz")
+plotting.plot_glass_brain(pc_img, display_mode='lzry', plot_abs=False,
+                          title='Network Hub', threshold=0.7)
+plt.show()
+
+
+## plot AF
+af_df = pd.read_csv('/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/Activity_Flow/noise_ceiling/corticocortical/af/59subs_ncaf_max.csv')
+af_vec = af_df.groupby('roi').mean()['All_GLT'].values
+fn = '/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/niis/af.nii.gz'
+af_nii = write_stats_to_vol_yeo_template_nifti(af_vec, fn, roisize = 400)
+plotting.plot_glass_brain(af_nii, display_mode='lzry', plot_abs=False,
+                          title='Activity Flow', threshold=0.63)
+plt.show()
+
 #end
