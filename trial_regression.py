@@ -17,17 +17,26 @@ if __name__ == "__main__":
 
     now = datetime.now()
     print("Start time: ", now)
-    permute = True
+    permute = False
 
     #### setup
     ## relevant paths
     data_dir = "/Shared/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/"
     out_dir = "/Shared/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/"
     coef_fn = 'whole_brain'
-    model_syntax = ["coef ~ 1 + context + task + response + color + shape + stim + identity + EDS + IDS + condition + error" +
-                    "+ context:color + context:shape + context:EDS + context:IDS + task:EDS + task:IDS + feature:EDS + feature:IDS" + 
-                    "+ context:EDS:error + context:IDS:error + feature:EDS:error + feature:IDS:error" + 
-                    "+ task:EDS:error + task:IDS:error + task:error"]
+    # model_syntax = ["coef ~ 1 + context + task + response + color + shape + stim + identity + EDS + IDS + condition + error" +
+    #                 "+ context:EDS + context:IDS + task:EDS + task:IDS + feature:EDS + feature:IDS" + 
+    #                 "+ response:EDS + response:IDS" + 
+    #                 "+ context:error + feature:error + task:error + response:error" +
+    #                 "+ context:color + context:shape "
+    #                 ]
+    
+    #simple model
+    model_syntax = ["coef ~ 1 + context + task + response + color + shape + stim + feature + error"]
+    
+    #task switch model
+    model_syntax = ["coef ~ 1 + context + task + response + color + shape + stim + feature + error" +
+                    "+ EDS*context*feature*task*rt*error + IDS*context*feature*task*rt*error"]
     num_permutations = 4096
 
     for s in [included_subjects]:
@@ -51,7 +60,7 @@ if __name__ == "__main__":
         print("number of usable cells from the trial by trial matrix: ", len(lower_triangle_usable_inds))
 
         # load models
-        models = ["context", "color", "shape", "task", "response", "stim", "EDS", "IDS", "condition", "feature", "error", "identity"]
+        models = ["context", "color", "shape", "task", "response", "stim", "EDS", "IDS", "condition", "feature", "error", "identity", "rt"]
         regressors = {}
         for m in models:
             regressors[m] = np.load(data_dir + "models/" + "%s_%s_model.npy" %(s, m))
@@ -67,7 +76,7 @@ if __name__ == "__main__":
             df = pd.DataFrame()
             df['coef'] = coef[r].flatten()[lower_triangle_usable_inds]
             for m in models:
-                df[m] = regressors[m].flatten()[lower_triangle_usable_inds] - regressors[m].flatten()[lower_triangle_usable_inds].mean() 
+                df[m] = regressors[m].flatten()[lower_triangle_usable_inds] - np.nanmean(regressors[m].flatten()[lower_triangle_usable_inds]) 
             
             # create interactions
             #df["context:color"] = df["context"] * df["color"]
@@ -78,7 +87,7 @@ if __name__ == "__main__":
             # df["shape:IDS"] = df["shape"] * df["IDS"]
             #X = df[['context', 'task', 'response', 'color', 'shape',  "stim", 'EDS', 'IDS', 'condition', 'context:EDS', 'color:IDS', 'shape:IDS']]
             #X = np.column_stack((np.ones(len(X)), X))
-            
+            df = df.dropna()
             model = smf.ols(formula = model_syntax[0], data=df)
             X = model.exog
             permuted_results = np.zeros((num_ROIs, X.shape[1],num_permutations)) 
@@ -102,7 +111,7 @@ if __name__ == "__main__":
                     permuted_results[:,:,p] = np.nan
            
             #save output
-            np.save(out_dir + "%s_%s_permutated_stats.npy" %(s, coef_fn), permuted_results)
+            np.save(out_dir + "%s_%s_switch_permutated_stats.npy" %(s, coef_fn), permuted_results)
 
         #else:
         results = []
@@ -112,8 +121,8 @@ if __name__ == "__main__":
             df = pd.DataFrame()
             df['coef'] = coef[r].flatten()[lower_triangle_usable_inds]
             for m in models:
-                df[m] = regressors[m].flatten()[lower_triangle_usable_inds] - regressors[m].flatten()[lower_triangle_usable_inds].mean() 
-
+                df[m] = regressors[m].flatten()[lower_triangle_usable_inds] - np.nanmean(regressors[m].flatten()[lower_triangle_usable_inds]) 
+            df = df.dropna()
             #run regression
             model = smf.ols(formula = model_syntax[0], data=df).fit()
             
@@ -126,7 +135,7 @@ if __name__ == "__main__":
             tdf = tdf.reset_index().rename(columns={'index': 'parameter'})
             results.append(tdf)
         results_df = pd.concat(results, ignore_index=True)    
-        results_df.to_csv(out_dir + "%s_%s_stats.csv" %(s, coef_fn))       
+        results_df.to_csv(out_dir + "%s_%s_switch_stats.csv" %(s, coef_fn))       
         # note, I have compared sm.ols and linalg.lstsq, they gave the same results
 
     now = datetime.now()
