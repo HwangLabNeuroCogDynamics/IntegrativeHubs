@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+from scipy.stats import zscore
 
 ## create model regressors, run on thalamege. 
 
@@ -14,6 +15,7 @@ for s in subjects:
     sdf = df.loc[df['sub'] == s]
     sdf = sdf.sort_values(by=['block', 'trial_n'], ascending=[True, True])
     num_trials = len(sdf)
+    zrt = zscore(sdf['rt'].values, nan_policy = 'omit')
 
     context_model = np.zeros((num_trials, num_trials))
     color_model = np.zeros((num_trials, num_trials))
@@ -29,6 +31,7 @@ for s in subjects:
     condition_model = np.zeros((num_trials, num_trials))
     error_model = np.zeros((num_trials, num_trials))
     identity_model = np.zeros((num_trials, num_trials))
+    rt_model = np.zeros((num_trials, num_trials))
 
     for i in np.arange(num_trials):
         context_model[i,:] = 1*(sdf['Texture'].values == sdf.iloc[i]['Texture'])
@@ -44,6 +47,7 @@ for s in subjects:
         condition_model[i,:] = 1*(sdf['Trial_type'].values == sdf.iloc[i]['Trial_type'])
         error_model[i,:] = 1*(sdf['trial_Corr'].values != 1)
         identity_model[i,:] = 1*(sdf['cue'].values == sdf.iloc[i]['cue'] )
+        rt_model[i,:] = zrt[i]-zrt
 
         if isinstance(sdf.iloc[i].version, str): # this is the swap version of subjects, DSFC
             if sdf.iloc[i]['Texture'] == 'Donut':
@@ -78,7 +82,7 @@ for s in subjects:
     np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_Stay_model.npy" %s, Stay_model)
     np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_condition_model.npy" %s, condition_model)    
     np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_error_model.npy" %s, error_model)    
-    np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_identity_model.npy" %s, identity_model) 
+    np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_rt_model.npy" %s, rt_model) 
 
 
 # end
