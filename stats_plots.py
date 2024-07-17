@@ -217,7 +217,7 @@ for m in models:
         fn = '/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/niis/%s_switch_t-statistic_thresholded.nii.gz' %m
         metric = stats_df.loc[stats_df['model']== m]['t-statistic'].values
         mask = stats_df.loc[stats_df['model']== m]['q'].values < .05
-        mask[np.argsort(abs(metric))[:-15]]=0
+        mask[np.argsort(abs(metric))[:-3]]=0
         thres_niis[m] = write_stats_to_vol_yeo_template_nifti(metric * mask, fn, roisize = 400)
         
 plotting.plot_glass_brain(thres_niis['context'], display_mode='lzry', plot_abs=False,

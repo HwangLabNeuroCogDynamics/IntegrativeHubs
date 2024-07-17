@@ -47,7 +47,7 @@ for s in subjects:
         condition_model[i,:] = 1*(sdf['Trial_type'].values == sdf.iloc[i]['Trial_type'])
         error_model[i,:] = 1*(sdf['trial_Corr'].values != 1)
         identity_model[i,:] = 1*(sdf['cue'].values == sdf.iloc[i]['cue'] )
-        rt_model[i,:] = zrt[i]-zrt
+        rt_model[i,:] = abs(zrt[i]-zrt)
 
         if isinstance(sdf.iloc[i].version, str): # this is the swap version of subjects, DSFC
             if sdf.iloc[i]['Texture'] == 'Donut':
