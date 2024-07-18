@@ -76,10 +76,10 @@ for s in subjects:
         
         #write this vector out and use it as amplitude regression in 3dDeconvolve
         ds[run_breaks] = 0
-        np.save(nii_dir + "sub-%s/switch_disntance.txt" %s, ds)
-        np.save(nii_dir + "sub-%s/EDS_switch_disntance.txt" %s, ds*EDS)
-        np.save(nii_dir + "sub-%s/IDS_switch_disntance.txt" %s, ds*IDS)
-        np.save(nii_dir + "sub-%s/Stay_switch_disntance.txt" %s, ds*Stay)
+        np.savetxt(nii_dir + "sub-%s/switch_distance.txt" %s, ds)
+        np.savetxt(nii_dir + "sub-%s/EDS_switch_distance.txt" %s, ds*EDS)
+        np.savetxt(nii_dir + "sub-%s/IDS_switch_distance.txt" %s, ds*IDS)
+        np.savetxt(nii_dir + "sub-%s/Stay_switch_distance.txt" %s, ds*Stay)
 
 
         #need to build X, include intercept
@@ -104,4 +104,3 @@ for s in subjects:
         for i, c in enumerate(["EDS", "IDS", "Stay"]):
             beta_nii = brain_masker.inverse_transform(results[0][i,:])
             beta_nii.to_filename(nii_dir + "sub-%s/%s_disntance_regression.nii.gz" %(s,c) )
-
