@@ -49,7 +49,7 @@ singularity run --cleanenv /Shared/lss_kahwang_hpc/opt/afni/afni.sif \
 cat ${deconvolve_path}sub-${subject}/tmp.1D | tail -n 8 > ${deconvolve_path}sub-${subject}/Stay_distance_mod.1D
 
 # 3dDeconvolve
-if [ ! -e "${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_stats_REML+tlrc.HEAD" ]; then
+if [ ! -e "${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_nort_stats_REML+tlrc.HEAD" ]; then
 
     singularity run --cleanenv /Shared/lss_kahwang_hpc/opt/afni/afni.sif \
     3dDeconvolve \
@@ -67,15 +67,14 @@ if [ ! -e "${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_stats_
     -censor ${deconvolve_path}sub-${subject}/censor.1D \
     -ortvec ${deconvolve_path}sub-${subject}/nuisance.1D \
     -local_times \
-    -num_stimts 4 \
-    -stim_times_AM1 1 ${deconvolve_path}sub-${subject}/trial_RT.1D 'GAM' -stim_label 1 RT \
-    -stim_times_AM2 2 ${deconvolve_path}sub-${subject}/EDS_distance_mod.1D 'SPMG2' -stim_label 2 EDS_distance \
-    -stim_times_AM2 3 ${deconvolve_path}sub-${subject}/IDS_distance_mod.1D 'SPMG2' -stim_label 3 IDS_distance \
-    -stim_times_AM2 4 ${deconvolve_path}sub-${subject}/Stay_distance_mod.1D 'SPMG2' -stim_label 4 Stay_distance \
+    -num_stimts 3 \
+    -stim_times_AM2 1 ${deconvolve_path}sub-${subject}/EDS_distance_mod.1D 'SPMG2' -stim_label 1 EDS_distance \
+    -stim_times_AM2 2 ${deconvolve_path}sub-${subject}/IDS_distance_mod.1D 'SPMG2' -stim_label 2 IDS_distance \
+    -stim_times_AM2 3 ${deconvolve_path}sub-${subject}/Stay_distance_mod.1D 'SPMG2' -stim_label 3 Stay_distance \
     -rout \
     -tout \
-    -bucket ${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_stats.nii.gz \
-    -errts ${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_errts.nii.gz \
+    -bucket ${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_nort_stats.nii.gz \
+    -errts ${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_nort_errts.nii.gz \
     -noFDR \
     -jobs 4 \
     -ok_1D_text \
@@ -85,9 +84,9 @@ if [ ! -e "${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_stats_
     # S#0 is associated with the major component of the hemodynamic response while S#1 corresponds to the first-order derivative. S#2 and S#3 are their corresponding slope (modulation) effects.
 
 
-    chmod 775 ${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_stats.REML_cmd
+    chmod 775 ${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_nort_stats.REML_cmd
     singularity exec --cleanenv /Shared/lss_kahwang_hpc/opt/afni/afni.sif \
-    ${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_stats.REML_cmd
+    ${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_nort_stats.REML_cmd
 
 fi
 
