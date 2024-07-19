@@ -1,4 +1,3 @@
-
 ##### write distnace to 3dDeconvolve 1d format. Need to use older version of pandas because the append method
 import numpy as np
 import pandas as pd
@@ -38,8 +37,8 @@ for sub in subjects:
             #all_trials = all_trials.append(df.loc[(df['sub'] == sub) & (df['block'] == r) & (df['trial_Corr']==1)].Time_Since_Run_Cue_Prez.reset_index(drop=True))
             rt = rt.append(df.loc[(df['sub'] == sub) & (df['block'] == r) & (df['trial_Corr']==1)].rt.reset_index(drop=True))
             eds_distance = eds_distance.append(df.loc[(df['sub'] == sub) & (df['block'] == r) & (df['Trial_type'] == 'EDS') & (df['trial_Corr']==1)].EDS_switch_distance.reset_index(drop=True))
-            ids_distance = ids_distance.append(df.loc[(df['sub'] == sub) & (df['block'] == r) & (df['Trial_type'] == 'EDS') & (df['trial_Corr']==1)].IDS_switch_distance.reset_index(drop=True))
-            stay_distance = stay_distance.append(df.loc[(df['sub'] == sub) & (df['block'] == r) & (df['Trial_type'] == 'EDS') & (df['trial_Corr']==1)].Stay_switch_distance.reset_index(drop=True))
+            ids_distance = ids_distance.append(df.loc[(df['sub'] == sub) & (df['block'] == r) & (df['Trial_type'] == 'IDS') & (df['trial_Corr']==1)].IDS_switch_distance.reset_index(drop=True))
+            stay_distance = stay_distance.append(df.loc[(df['sub'] == sub) & (df['block'] == r) & (df['Trial_type'] == 'Stay') & (df['trial_Corr']==1)].Stay_switch_distance.reset_index(drop=True))
             
 
         #np.savetxt(decon_path + 'sub-{}/EDS.acc.1D'.format(sub),eds.to_numpy(),fmt='%1.4f') 

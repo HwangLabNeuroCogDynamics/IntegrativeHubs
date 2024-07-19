@@ -3,7 +3,7 @@
 #$ -q SEASHORE
 #$ -pe smp 4
 #$ -t 1-73
-#$ -tc 25
+#$ -tc 10
 #$ -ckpt user
 #$ -o /Users/kahwang/sge_logs/
 #$ -e /Users/kahwang/sge_logs/
@@ -49,39 +49,47 @@ singularity run --cleanenv /Shared/lss_kahwang_hpc/opt/afni/afni.sif \
 cat ${deconvolve_path}sub-${subject}/tmp.1D | tail -n 8 > ${deconvolve_path}sub-${subject}/Stay_distance_mod.1D
 
 # 3dDeconvolve
-singularity run --cleanenv /Shared/lss_kahwang_hpc/opt/afni/afni.sif \
-3dDeconvolve \
--input \
-/Shared/lss_kahwang_hpc/data/ThalHi/fmriprep/sub-${subject}/func/sub-${subject}_task-ThalHi_run-1_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz \
-/Shared/lss_kahwang_hpc/data/ThalHi/fmriprep/sub-${subject}/func/sub-${subject}_task-ThalHi_run-2_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz \
-/Shared/lss_kahwang_hpc/data/ThalHi/fmriprep/sub-${subject}/func/sub-${subject}_task-ThalHi_run-3_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz \
-/Shared/lss_kahwang_hpc/data/ThalHi/fmriprep/sub-${subject}/func/sub-${subject}_task-ThalHi_run-4_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz \
-/Shared/lss_kahwang_hpc/data/ThalHi/fmriprep/sub-${subject}/func/sub-${subject}_task-ThalHi_run-5_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz \
-/Shared/lss_kahwang_hpc/data/ThalHi/fmriprep/sub-${subject}/func/sub-${subject}_task-ThalHi_run-6_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz \
-/Shared/lss_kahwang_hpc/data/ThalHi/fmriprep/sub-${subject}/func/sub-${subject}_task-ThalHi_run-7_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz \
-/Shared/lss_kahwang_hpc/data/ThalHi/fmriprep/sub-${subject}/func/sub-${subject}_task-ThalHi_run-8_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz \
--mask ${deconvolve_path}sub-${subject}/combined_mask+tlrc \
--polort A \
--censor ${deconvolve_path}sub-${subject}/censor.1D \
--ortvec ${deconvolve_path}sub-${subject}/nuisance.1D \
--local_times \
--num_stimts 4 \
--stim_times_AM1 1 ${deconvolve_path}sub-${subject}/trial_RT.1D 'GAM' -stim_label 1 RT \
--stim_times_AM2 2 ${deconvolve_path}sub-${subject}/EDS_distance_mod.1D 'SPMG2' -stim_label 2 EDS_distance \
--stim_times_AM2 3 ${deconvolve_path}sub-${subject}/IDS_distance_mod.1D 'SPMG2' -stim_label 3 IDS_distance \
--stim_times_AM2 4 ${deconvolve_path}sub-${subject}/Stay_distance_mod.1D 'SPMG2' -stim_label 4 Stay_distance \
--rout \
--tout \
--bucket ${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_stats.nii.gz \
--errts ${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_errts.nii.gz \
--noFDR \
--jobs 4 \
--ok_1D_text \
--GOFORIT 99 
+if [ ! -e "${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_stats_REML+tlrc.HEAD" ]; then
 
-chmod 775 ${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_stats.REML_cmd
-singularity exec --cleanenv /Shared/lss_kahwang_hpc/opt/afni/afni.sif \
-${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_stats.REML_cmd
+    singularity run --cleanenv /Shared/lss_kahwang_hpc/opt/afni/afni.sif \
+    3dDeconvolve \
+    -input \
+    /Shared/lss_kahwang_hpc/data/ThalHi/fmriprep/sub-${subject}/func/sub-${subject}_task-ThalHi_run-1_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz \
+    /Shared/lss_kahwang_hpc/data/ThalHi/fmriprep/sub-${subject}/func/sub-${subject}_task-ThalHi_run-2_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz \
+    /Shared/lss_kahwang_hpc/data/ThalHi/fmriprep/sub-${subject}/func/sub-${subject}_task-ThalHi_run-3_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz \
+    /Shared/lss_kahwang_hpc/data/ThalHi/fmriprep/sub-${subject}/func/sub-${subject}_task-ThalHi_run-4_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz \
+    /Shared/lss_kahwang_hpc/data/ThalHi/fmriprep/sub-${subject}/func/sub-${subject}_task-ThalHi_run-5_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz \
+    /Shared/lss_kahwang_hpc/data/ThalHi/fmriprep/sub-${subject}/func/sub-${subject}_task-ThalHi_run-6_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz \
+    /Shared/lss_kahwang_hpc/data/ThalHi/fmriprep/sub-${subject}/func/sub-${subject}_task-ThalHi_run-7_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz \
+    /Shared/lss_kahwang_hpc/data/ThalHi/fmriprep/sub-${subject}/func/sub-${subject}_task-ThalHi_run-8_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz \
+    -mask ${deconvolve_path}sub-${subject}/combined_mask+tlrc \
+    -polort A \
+    -censor ${deconvolve_path}sub-${subject}/censor.1D \
+    -ortvec ${deconvolve_path}sub-${subject}/nuisance.1D \
+    -local_times \
+    -num_stimts 4 \
+    -stim_times_AM1 1 ${deconvolve_path}sub-${subject}/trial_RT.1D 'GAM' -stim_label 1 RT \
+    -stim_times_AM2 2 ${deconvolve_path}sub-${subject}/EDS_distance_mod.1D 'SPMG2' -stim_label 2 EDS_distance \
+    -stim_times_AM2 3 ${deconvolve_path}sub-${subject}/IDS_distance_mod.1D 'SPMG2' -stim_label 3 IDS_distance \
+    -stim_times_AM2 4 ${deconvolve_path}sub-${subject}/Stay_distance_mod.1D 'SPMG2' -stim_label 4 Stay_distance \
+    -rout \
+    -tout \
+    -bucket ${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_stats.nii.gz \
+    -errts ${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_errts.nii.gz \
+    -noFDR \
+    -jobs 4 \
+    -ok_1D_text \
+    -GOFORIT 99 
+
+    #to interpret the output:
+    # S#0 is associated with the major component of the hemodynamic response while S#1 corresponds to the first-order derivative. S#2 and S#3 are their corresponding slope (modulation) effects.
+
+
+    chmod 775 ${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_stats.REML_cmd
+    singularity exec --cleanenv /Shared/lss_kahwang_hpc/opt/afni/afni.sif \
+    ${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_stats.REML_cmd
+
+fi
 
 
 # -num_glt 13 \
