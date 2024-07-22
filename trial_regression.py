@@ -36,7 +36,7 @@ if __name__ == "__main__":
     
     #task switch model
     model_syntax = ["coef ~ 1 + context + task + response + color + shape + stim + feature + error" +
-                    "+ EDS*context*feature*task*rt*error + IDS*context*feature*task*rt*error"]
+                    "+ rt + rt*EDS*context + rt*IDS*feature + rt*EDS*feature + rt*IDS*context"]
     num_permutations = 4096
 
     for s in [included_subjects]:

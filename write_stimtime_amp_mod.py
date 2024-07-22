@@ -21,13 +21,14 @@ for sub in subjects:
         num_trials = len((df.loc[(df['sub'] == sub)]))
         run_breaks = np.arange(0,num_trials,51)
         #print(sub)
-        
+        df.loc[(df['sub'] == sub), 'switch_distance'] = np.loadtxt(decon_path + "sub-%s/switch_distance.txt" %sub)
         df.loc[(df['sub'] == sub), 'EDS_switch_distance'] = np.loadtxt(decon_path + "sub-%s/EDS_switch_distance.txt" %sub)
         df.loc[(df['sub'] == sub), 'IDS_switch_distance'] = np.loadtxt(decon_path + "sub-%s/IDS_switch_distance.txt" %sub)
         df.loc[(df['sub'] == sub), 'Stay_switch_distance'] = np.loadtxt(decon_path + "sub-%s/Stay_switch_distance.txt" %sub)
         eds_distance=pd.DataFrame()
         ids_distance=pd.DataFrame()
         stay_distance=pd.DataFrame()        
+        switch_distance = pd.DataFrame()
         
         for r in runs:
             eds = eds.append(df.loc[(df['sub'] == sub) & (df['block'] == r) & (df['Trial_type'] == 'EDS') & (df['trial_Corr']==1)].Time_Since_Run_Cue_Prez.reset_index(drop=True))
@@ -35,11 +36,11 @@ for sub in subjects:
             stay = stay.append(df.loc[(df['sub'] == sub) & (df['block'] == r) & (df['Trial_type'] == 'Stay') & (df['trial_Corr']==1)].Time_Since_Run_Cue_Prez.reset_index(drop=True))
             #errors = errors.append(df.loc[(df['sub'] == sub) & (df['block'] == r) & (df['trial_Corr']==0)].Time_Since_Run_Cue_Prez.reset_index(drop=True)) # not sure we want to model this given the low number of error trials
             #all_trials = all_trials.append(df.loc[(df['sub'] == sub) & (df['block'] == r) & (df['trial_Corr']==1)].Time_Since_Run_Cue_Prez.reset_index(drop=True))
-            rt = rt.append(df.loc[(df['sub'] == sub) & (df['block'] == r) & (df['trial_Corr']==1)].rt.reset_index(drop=True))
+            #rt = rt.append(df.loc[(df['sub'] == sub) & (df['block'] == r) & (df['trial_Corr']==1)].rt.reset_index(drop=True))
             eds_distance = eds_distance.append(df.loc[(df['sub'] == sub) & (df['block'] == r) & (df['Trial_type'] == 'EDS') & (df['trial_Corr']==1)].EDS_switch_distance.reset_index(drop=True))
             ids_distance = ids_distance.append(df.loc[(df['sub'] == sub) & (df['block'] == r) & (df['Trial_type'] == 'IDS') & (df['trial_Corr']==1)].IDS_switch_distance.reset_index(drop=True))
             stay_distance = stay_distance.append(df.loc[(df['sub'] == sub) & (df['block'] == r) & (df['Trial_type'] == 'Stay') & (df['trial_Corr']==1)].Stay_switch_distance.reset_index(drop=True))
-            
+            switch_distance = switch_distance.append(df.loc[(df['sub'] == sub) & (df['block'] == r) & (df['trial_Corr']==1)].switch_distance.reset_index(drop=True))
 
         #np.savetxt(decon_path + 'sub-{}/EDS.acc.1D'.format(sub),eds.to_numpy(),fmt='%1.4f') 
         #np.savetxt(decon_path + 'sub-{}/IDS.acc.1D'.format(sub),ids.to_numpy(),fmt='%1.4f')
@@ -50,6 +51,7 @@ for sub in subjects:
         np.savetxt(decon_path + 'sub-{}/EDS_distance.1D'.format(sub),eds_distance.to_numpy(),fmt='%1.4f')
         np.savetxt(decon_path + 'sub-{}/IDS_distance.1D'.format(sub),ids_distance.to_numpy(),fmt='%1.4f')
         np.savetxt(decon_path + 'sub-{}/Stay_distance.1D'.format(sub),stay_distance.to_numpy(),fmt='%1.4f')
+        np.savetxt(decon_path + 'sub-{}/Switch_distance.1D'.format(sub),switch_distance.to_numpy(),fmt='%1.4f')
 
     except:
         print(sub)
