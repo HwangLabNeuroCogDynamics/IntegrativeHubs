@@ -3,7 +3,7 @@
 #$ -q SEASHORE
 #$ -pe smp 4
 #$ -t 1-73
-#$ -tc 10
+#$ -tc 30
 #$ -ckpt user
 #$ -o /Users/kahwang/sge_logs/
 #$ -e /Users/kahwang/sge_logs/
@@ -30,11 +30,16 @@ sed -i "s/nan//g" ${deconvolve_path}sub-${subject}/Stay.acc.1D
 sed -i "s/nan//g" ${deconvolve_path}sub-${subject}/EDS_distance.1D
 sed -i "s/nan//g" ${deconvolve_path}sub-${subject}/IDS_distance.1D
 sed -i "s/nan//g" ${deconvolve_path}sub-${subject}/Stay_distance.1D
+sed -i "s/nan//g" ${deconvolve_path}sub-${subject}/Switch_distance.1D
 
 # create amplitude modulated regressors
 singularity run --cleanenv /Shared/lss_kahwang_hpc/opt/afni/afni.sif \
 1dMarry ${deconvolve_path}sub-${subject}/All_Trials.1D ${deconvolve_path}sub-${subject}/RT.1D > ${deconvolve_path}sub-${subject}/tmp.1D
 cat ${deconvolve_path}sub-${subject}/tmp.1D | tail -n 8 > ${deconvolve_path}sub-${subject}/trial_RT.1D
+
+singularity run --cleanenv /Shared/lss_kahwang_hpc/opt/afni/afni.sif \
+1dMarry ${deconvolve_path}sub-${subject}/All_Trials.1D ${deconvolve_path}sub-${subject}/Switch_distance.1D > ${deconvolve_path}sub-${subject}/tmp.1D
+cat ${deconvolve_path}sub-${subject}/tmp.1D | tail -n 8 > ${deconvolve_path}sub-${subject}/distance_mod.1D
 
 singularity run --cleanenv /Shared/lss_kahwang_hpc/opt/afni/afni.sif \
 1dMarry ${deconvolve_path}sub-${subject}/EDS.acc.1D ${deconvolve_path}sub-${subject}/EDS_distance.1D > ${deconvolve_path}sub-${subject}/tmp.1D
@@ -49,7 +54,7 @@ singularity run --cleanenv /Shared/lss_kahwang_hpc/opt/afni/afni.sif \
 cat ${deconvolve_path}sub-${subject}/tmp.1D | tail -n 8 > ${deconvolve_path}sub-${subject}/Stay_distance_mod.1D
 
 # 3dDeconvolve
-if [ ! -e "${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_nort_stats_REML+tlrc.HEAD" ]; then
+if [ ! -e "${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_stats_REML+tlrc.HEAD" ]; then
 
     singularity run --cleanenv /Shared/lss_kahwang_hpc/opt/afni/afni.sif \
     3dDeconvolve \
@@ -67,14 +72,27 @@ if [ ! -e "${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_nort_s
     -censor ${deconvolve_path}sub-${subject}/censor.1D \
     -ortvec ${deconvolve_path}sub-${subject}/nuisance.1D \
     -local_times \
-    -num_stimts 3 \
-    -stim_times_AM2 1 ${deconvolve_path}sub-${subject}/EDS_distance_mod.1D 'SPMG2' -stim_label 1 EDS_distance \
-    -stim_times_AM2 2 ${deconvolve_path}sub-${subject}/IDS_distance_mod.1D 'SPMG2' -stim_label 2 IDS_distance \
-    -stim_times_AM2 3 ${deconvolve_path}sub-${subject}/Stay_distance_mod.1D 'SPMG2' -stim_label 3 Stay_distance \
+    -num_stimts 5 \
+    -stim_times_AM1 1 ${deconvolve_path}sub-${subject}/trial_RT.1D 'GAM' -stim_label 1 RT \
+    -stim_times 2 ${deconvolve_path}sub-${subject}/EDS.acc.1D 'TENT(6, 20.4, 9)' -stim_label 2 EDS \
+    -stim_times 3 ${deconvolve_path}sub-${subject}/IDS.acc.1D 'TENT(6, 20.4, 9)' -stim_label 3 IDS \
+    -stim_times 4 ${deconvolve_path}sub-${subject}/Stay.acc.1D 'TENT(6, 20.4, 9)' -stim_label 4 Stay \
+    -stim_times_AM1 5 ${deconvolve_path}sub-${subject}/distance_mod.1D 'GAM' -stim_label 5 Switch_distance \
+    -num_glt 9 \
+    -gltsym 'SYM: +1*Switch_distance' -glt_label 1 Switch_distance \
+    -gltsym 'SYM: +1*RT' -glt_label 2 RT \
+    -gltsym 'SYM: +1*EDS' -glt_label 3 EDS \
+    -gltsym 'SYM: +1*IDS' -glt_label 4 IDS \
+    -gltsym 'SYM: +1*Stay' -glt_label 5 Stay \
+    -gltsym 'SYM: +1*EDS - 1*IDS' -glt_label 6 EDS-IDS \
+    -gltsym 'SYM: +1*IDS - 1*Stay' -glt_label 7 IDS-Stay \
+    -gltsym 'SYM: +1*EDS + 1*IDS + 1*Stay' -glt_label 8 All \
+    -gltsym 'SYM: +1*EDS + 1*IDS - 2*Stay' -glt_label 9 Switch \
+    -nocout \
     -rout \
     -tout \
-    -bucket ${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_nort_stats.nii.gz \
-    -errts ${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_nort_errts.nii.gz \
+    -bucket ${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_stats.nii.gz \
+    -errts ${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_errts.nii.gz \
     -noFDR \
     -jobs 4 \
     -ok_1D_text \
@@ -84,9 +102,9 @@ if [ ! -e "${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_nort_s
     # S#0 is associated with the major component of the hemodynamic response while S#1 corresponds to the first-order derivative. S#2 and S#3 are their corresponding slope (modulation) effects.
 
 
-    chmod 775 ${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_nort_stats.REML_cmd
+    chmod 775 ${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_stats.REML_cmd
     singularity exec --cleanenv /Shared/lss_kahwang_hpc/opt/afni/afni.sif \
-    ${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_nort_stats.REML_cmd
+    ${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_stats.REML_cmd
 
 fi
 
