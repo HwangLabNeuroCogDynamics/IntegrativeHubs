@@ -72,14 +72,16 @@ if [ ! -e "${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_stats_
     -censor ${deconvolve_path}sub-${subject}/censor.1D \
     -ortvec ${deconvolve_path}sub-${subject}/nuisance.1D \
     -local_times \
-    -num_stimts 5 \
+    -num_stimts 7 \
     -stim_times_AM1 1 ${deconvolve_path}sub-${subject}/trial_RT.1D 'GAM' -stim_label 1 RT \
     -stim_times 2 ${deconvolve_path}sub-${subject}/EDS.acc.1D 'TENT(6, 20.4, 9)' -stim_label 2 EDS \
     -stim_times 3 ${deconvolve_path}sub-${subject}/IDS.acc.1D 'TENT(6, 20.4, 9)' -stim_label 3 IDS \
     -stim_times 4 ${deconvolve_path}sub-${subject}/Stay.acc.1D 'TENT(6, 20.4, 9)' -stim_label 4 Stay \
-    -stim_times_AM1 5 ${deconvolve_path}sub-${subject}/distance_mod.1D 'GAM' -stim_label 5 Switch_distance \
-    -num_glt 9 \
-    -gltsym 'SYM: +1*Switch_distance' -glt_label 1 Switch_distance \
+    -stim_times_AM1 5 ${deconvolve_path}sub-${subject}/EDS_distance_mod.1D 'GAM' -stim_label 5 EDS_Switch_distance \
+    -stim_times_AM1 6 ${deconvolve_path}sub-${subject}/IDS_distance_mod.1D 'GAM' -stim_label 6 IDS_Switch_distance \
+    -stim_times_AM1 7 ${deconvolve_path}sub-${subject}/Stay_distance_mod.1D 'GAM' -stim_label 7 Stay_Switch_distance \
+    -num_glt 14 \
+    -gltsym 'SYM: +1*EDS_Switch_distance +1*IDS_Switch_distance +1*Stay_Switch_distance' -glt_label 1 Switch_distance \
     -gltsym 'SYM: +1*RT' -glt_label 2 RT \
     -gltsym 'SYM: +1*EDS' -glt_label 3 EDS \
     -gltsym 'SYM: +1*IDS' -glt_label 4 IDS \
@@ -88,6 +90,11 @@ if [ ! -e "${deconvolve_path}sub-${subject}/sub-${subject}_distance_model_stats_
     -gltsym 'SYM: +1*IDS - 1*Stay' -glt_label 7 IDS-Stay \
     -gltsym 'SYM: +1*EDS + 1*IDS + 1*Stay' -glt_label 8 All \
     -gltsym 'SYM: +1*EDS + 1*IDS - 2*Stay' -glt_label 9 Switch \
+    -gltsym 'SYM: +1*EDS_Switch_distance' -glt_label 10 EDS_Switch_distance \
+    -gltsym 'SYM: +1*IDS_Switch_distance' -glt_label 11 IDS_Switch_distance \
+    -gltsym 'SYM: +1*Stay_Switch_distance' -glt_label 12 Stay_Switch_distance \
+    -gltsym 'SYM: +1*EDS_Switch_distance -1*IDS_Switch_distance' -glt_label 13 EDS-IDS_Switch_distance \
+    -gltsym 'SYM: +1*IDS_Switch_distance -1*Stay_Switch_distance' -glt_label 14 IDS-Stay_Switch_distance \
     -nocout \
     -rout \
     -tout \
