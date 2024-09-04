@@ -32,6 +32,8 @@ for s in subjects:
     error_model = np.zeros((num_trials, num_trials))
     identity_model = np.zeros((num_trials, num_trials))
     rt_model = np.zeros((num_trials, num_trials))
+    feature_color_model = np.zeros((num_trials, num_trials))
+    feature_shape_model = np.zeros((num_trials, num_trials))
 
     for i in np.arange(num_trials):
         context_model[i,:] = 1*(sdf['Texture'].values == sdf.iloc[i]['Texture'])
@@ -53,19 +55,23 @@ for s in subjects:
             if sdf.iloc[i]['Texture'] == 'Donut':
                 rel_feature = 'Shape'
                 feature_model[i,:] = 1*((sdf[rel_feature].values == sdf.iloc[i][rel_feature]) & (sdf['Texture'].values == 'Donut'))  
-                
+                feature_shape_model[i,:] = 1*((sdf[rel_feature].values == sdf.iloc[i][rel_feature]) & (sdf['Texture'].values == 'Donut'))  
+
             if sdf.iloc[i]['Texture'] == 'Filled':
                 rel_feature = 'Color'
                 feature_model[i,:] = 1*((sdf[rel_feature].values == sdf.iloc[i][rel_feature]) & (sdf['Texture'].values == 'Filled')) 
+                feature_color_model[i,:] = 1*((sdf[rel_feature].values == sdf.iloc[i][rel_feature]) & (sdf['Texture'].values == 'Filled'))
 
         else: # these are DCFS version subjects
             if sdf.iloc[i]['Texture'] == 'Donut':
                 rel_feature = 'Color'
                 feature_model[i,:] = 1*((sdf[rel_feature].values == sdf.iloc[i][rel_feature]) & (sdf['Texture'].values == 'Donut'))
-                
+                feature_color_model[i,:] = 1*((sdf[rel_feature].values == sdf.iloc[i][rel_feature]) & (sdf['Texture'].values == 'Donut'))
+
             if sdf.iloc[i]['Texture'] == 'Filled':
                 rel_feature = 'Shape'
                 feature_model[i,:] = 1*((sdf[rel_feature].values == sdf.iloc[i][rel_feature]) & (sdf['Texture'].values == 'Filled'))
+                feature_shape_model[i,:] = 1*((sdf[rel_feature].values == sdf.iloc[i][rel_feature]) & (sdf['Texture'].values == 'Filled'))
 
 
     np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_context_model.npy" %s, context_model)
