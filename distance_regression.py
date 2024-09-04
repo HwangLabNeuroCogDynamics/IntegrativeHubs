@@ -53,15 +53,15 @@ for s in subjects:
     # -- reduce LSS data to just amplitude information and then convert back to nii format
     # LSS data dim 4 set up like ...
     # [amplitude_trial_0, derivative_trial_0, amplitude_trial_1, derivative_trial_1, ...]
-    cur_lss_nii = nib.load(nii_dir + "sub-%s/cue.LSS.nii.gz" %s)
-    cur_lss_data = cur_lss_nii.get_fdata()
-    lss_data_idx = np.array( [np.arange(0,num_trials*2,2), np.arange(1,num_trials*2,2)] ) #.flatten() # so that all amplitude values are in the 1st half and all derivative values are in the 2nd half of the file
-    cur_lss_data_amp = cur_lss_data[:, :, :, lss_data_idx[0]]
-    cur_lss_amp_nii=nilearn.image.new_img_like(cur_lss_nii, cur_lss_data_amp) # convert back to nii
-    print("lss shape ",cur_lss_amp_nii.shape)
+    # cur_lss_nii = nib.load(nii_dir + "sub-%s/cue.LSS.nii.gz" %s)
+    # cur_lss_data = cur_lss_nii.get_fdata()
+    # lss_data_idx = np.array( [np.arange(0,num_trials*2,2), np.arange(1,num_trials*2,2)] ) #.flatten() # so that all amplitude values are in the 1st half and all derivative values are in the 2nd half of the file
+    # cur_lss_data_amp = cur_lss_data[:, :, :, lss_data_idx[0]]
+    # cur_lss_amp_nii=nilearn.image.new_img_like(cur_lss_nii, cur_lss_data_amp) # convert back to nii
+    # print("lss shape ",cur_lss_amp_nii.shape)
 
-    brain_masker = nilearn.maskers.NiftiMasker()
-    brain_time_series = brain_masker.fit_transform(cur_lss_amp_nii)
+    # brain_masker = nilearn.maskers.NiftiMasker()
+    # brain_time_series = brain_masker.fit_transform(cur_lss_amp_nii)
 
     for roi in [349]: #peak task rep coding ROI. remember to take minus one for indexing 
         
@@ -72,7 +72,7 @@ for s in subjects:
         for t1 in np.arange(num_trials-1):
             t2 = t1+1
             ds[t2] = data[roi-1, t1, t2]
-        ds = np.sqrt(2*(1-abs(ds)))   #correlation distance
+        ds = np.sqrt(2*(1-ds))   #correlation distance
         
         #write this vector out and use it as amplitude regression in 3dDeconvolve
         ds[run_breaks] = 0
