@@ -81,7 +81,9 @@ for s in subjects:
     np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_response_model.npy" %s, response_model)
     np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_stim_model.npy" %s, stim_model)
     np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_feature_model.npy" %s, feature_model)
-    
+    np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_feature_color_model.npy" %s, feature_color_model)
+    np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_feature_shape_model.npy" %s, feature_shape_model)
+
     np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_identity_model.npy" %s, identity_model)
     np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_EDS_model.npy" %s, EDS_model)
     np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_IDS_model.npy" %s, IDS_model)
