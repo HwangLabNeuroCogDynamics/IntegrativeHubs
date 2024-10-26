@@ -50,33 +50,39 @@ nulls = np.zeros((59,418,len(models),4096)) #sub by roi by var by permutations
 for i, s in enumerate(subjects):
     nulls[i,:,:,:] = np.load("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/%s_whole_brain_permutated_stats.npy" %s)
 
-# Convert to DataFrame
-mean_null = np.mean(nulls, axis = (0))
-df = pd.DataFrame(mean_null[:,4,:].T)  # Transpose to have 1000 rows and 418 columns
-
-# Overlapping histograms with transparency
-# plt.figure(figsize=(12, 8))
-# for col in df.columns:
-#     sns.histplot(df[col], bins=30, kde=False, alpha=0.3)
-# plt.show()
 
 t_nulls = np.zeros((418,len(models),4096))
-for p in np.arange(4096):
-     for r in np.arange(418):
-          for v in np.arange(len(models)):
-               t_nulls[r,v,p], _= ttest_1samp(nulls[:,r,v,p], 0, nan_policy ='omit')
+# for r in range(418):
+#     for v in range(len(models)):
+#         t_nulls[r, v, :], _ = ttest_1samp(nulls[:, r, v, :], 0, axis=0, nan_policy='omit')
+
+# Use Parallel and delayed to parallelize the nested loops
+from joblib import Parallel, delayed
+def perform_ttest(r, v):
+    return ttest_1samp(nulls[:, r, v, :], 0, axis=0, nan_policy='omit')[0]
+
+results = Parallel(n_jobs=-1)(delayed(perform_ttest)(r, v) for r in range(418) for v in range(len(models)))
+
+# Reshape the results and assign to t_nulls
+for idx, (r, v) in enumerate([(r, v) for r in range(418) for v in range(len(models))]):
+    t_nulls[r, v, :] = results[idx]
 
 
-df = pd.DataFrame(t_nulls[:,9,:].T) 
-plt.figure(figsize=(12, 8))
-for col in np.arange(415,418):
-    sns.histplot(df[col], bins=30, kde=False, alpha=0.3)
-plt.show()
-## remarkbly, the 97.5 percentile of the null seems to be around t=2. But with some diff between ROIs, so perhaps ROI specific null is a good idea.
+np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/t_nulls.npy", t_nulls)
+
+# quick plot to take a look at null distribution
+# df = pd.DataFrame(t_nulls[:,4,:].T) 
+# plt.figure(figsize=(12, 8))
+# for col in np.arange(415,418):
+#     sns.histplot(df[col], bins=30, kde=False, alpha=0.3)
+# plt.show()
+## remarkbly, the 97.5 percentile of the null seems to be around t=2, very similar to parametric test. But with some diff between ROIs, so perhaps ROI specific null is a good idea.
 
 ### run stats using empirical p
 permutation_stats = []
-for r in range(400): #results_df.ROI.unique()
+t_nulls = np.load("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/t_nulls.npy")
+
+for r in range(418): #results_df.ROI.unique()
     for i, m in enumerate(models):
         if i == 0: #no intercept
             continue
@@ -87,7 +93,7 @@ for r in range(400): #results_df.ROI.unique()
             
             ttdf = pd.DataFrame({
                 't-statistic': [t_stat],
-                'p-value': 1-(np.mean(t_stat>t_nulls[r,i,:])),
+                'p-value': 1-(np.mean(t_stat>t_nulls[r,i,:].flatten())),
                 'mean': [np.nanmean(tdf['coef'])],
                 'ROI': r+1,
                 'model': m
@@ -98,14 +104,16 @@ permutation_stats_df['q'] = fdrcorrection(permutation_stats_df['p-value'])[1]
 permutation_stats_df.to_csv('/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/permutation_stats_df.csv')
 
 
-# create thresholded nii images      
+# create thresholded nii images
+
+permutation_stats_df = pd.read_csv("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/permutation_stats_df.csv")       
 thres_niis = {}
 for m in models:
     if m != 'Intercept':
         fn = '/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/niis/%s_t-statistic_thresholded.nii.gz' %m
         metric = permutation_stats_df.loc[permutation_stats_df['model']== m]['t-statistic'].values
         mask = permutation_stats_df.loc[permutation_stats_df['model']== m]['q'].values < .05
-        mask[np.argsort(metric)[:-15]]=0
+        #mask[np.argsort(metric)[:-15]]=0
         thres_niis[m] = write_stats_to_vol_yeo_template_nifti(metric * mask, fn, roisize = 400)
         
 ### create nii images
@@ -116,32 +124,25 @@ for m in models:
 #     write_stats_to_vol_yeo_template_nifti(metric * mask, fn, roisize = 418)
 
 plotting.plot_glass_brain(thres_niis['context'], display_mode='lzry', plot_abs=False,
-                          title='', threshold=2)
+                          title='', threshold=0.1)
 plt.show()
 
-plotting.plot_glass_brain(thres_niis['shape'], display_mode='lzry', plot_abs=False,
-                          title='', threshold=2)
+plotting.plot_glass_brain(thres_niis['feature_shape'], display_mode='lzry', plot_abs=False,
+                          title='', threshold=0.1)
 plt.show()
 
-plotting.plot_glass_brain(thres_niis['color'], display_mode='lzry', plot_abs=False,
-                          title='', threshold=2)
-plt.show()
-
-plotting.plot_glass_brain(thres_niis['feature'], display_mode='lzry', plot_abs=False,
-                          title='', threshold=2)
+plotting.plot_glass_brain(thres_niis['feature_color'], display_mode='lzry', plot_abs=False,
+                          title='', threshold=0.1)
 plt.show()
 
 plotting.plot_glass_brain(thres_niis['task'], display_mode='lzry', plot_abs=False,
-                          title='', threshold=2)
+                        title='', threshold=2)
 plt.show()
 
 plotting.plot_glass_brain(thres_niis['response'], display_mode='lzry', plot_abs=False,
                           title='', threshold=2)
 plt.show()
 
-plotting.plot_glass_brain(thres_niis['stim'], display_mode='lzry', plot_abs=False,
-                          title='', threshold=2)
-plt.show()
 
 permutation_stats_df.loc[permutation_stats_df['ROI']==405]
 
@@ -152,7 +153,8 @@ for m in models:
     if m != 'Intercept':
         #fn = '/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/niis/%s_t-statistic_thresholded.nii.gz' %m
         metric = permutation_stats_df.loc[permutation_stats_df['model']== m]['t-statistic'].values
-        mask = permutation_stats_df.loc[permutation_stats_df['model']== m]['q'].values < .5
+        mask = permutation_stats_df.loc[permutation_stats_df['model']== m]['q'].values < .05
+        #roi_idx = np.where(mask)[0]+1
         roi_idx = np.intersect1d(np.argsort(metric)[-15:], np.where(mask)) + 1
         #roi_idx = np.argsort(metric)[-15:]+1
         adf = af_df.loc[af_df['roi'].isin(roi_idx)]
@@ -162,11 +164,11 @@ for m in models:
         # print("EDSvIDS: ", ttest_rel(adf['EDS'], adf['IDS']))
         # print("IDSvstay: ", ttest_rel(adf['IDS'], adf['Stay']))
 
-print("context v feature: ", ttest_rel(af_rsa['context'], af_rsa['feature']))
-print("context v color: ", ttest_rel(af_rsa['context'], af_rsa['color']))
-print("context v shape: ", ttest_rel(af_rsa['context'], af_rsa['shape']))
-print("context v task: ", ttest_rel(af_rsa['context'], af_rsa['task']))
-print("context v response: ", ttest_rel(af_rsa['context'], af_rsa['response']))
+print("context v feature: ", ttest_rel(af_rsa['context'], af_rsa['context:color']))
+print("context v color: ", ttest_rel(af_rsa['context'], af_rsa['context:shape']))
+#print("context v shape: ", ttest_rel(af_rsa['context'], af_rsa['task']))
+# print("context v task: ", ttest_rel(af_rsa['context'], af_rsa['task']))
+# print("context v response: ", ttest_rel(af_rsa['context'], af_rsa['response']))
 
 
 
@@ -274,5 +276,15 @@ fig.show()
 # plotting.plot_glass_brain(af_nii, display_mode='lzry', plot_abs=False,
 #                           title='Activity Flow', threshold=0.63)
 # plt.show()
+
+
+#       t-statistic   p-value      mean  ROI          model         q
+# 2400     1.527353  0.065761  0.000337  401        context  0.163458
+# 2401     0.206256  0.412981  0.000025  401           task  0.569651
+# 2402     0.166267  0.428449  0.000017  401       response  0.583044
+# 2403     0.977686  0.164586  0.000280  401  context:color  0.304411
+# 2404     0.515502  0.299857  0.000142  401  context:shape  0.449786
+# 2405     1.624831  0.054565  0.000374  401       identity  0.144509
+
 
 #end

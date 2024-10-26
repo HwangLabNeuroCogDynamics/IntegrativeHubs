@@ -34,6 +34,7 @@ for s in subjects:
     rt_model = np.zeros((num_trials, num_trials))
     feature_color_model = np.zeros((num_trials, num_trials))
     feature_shape_model = np.zeros((num_trials, num_trials))
+    response_repeat_model = np.zeros((num_trials, num_trials))
 
     for i in np.arange(num_trials):
         context_model[i,:] = 1*(sdf['Texture'].values == sdf.iloc[i]['Texture'])
@@ -50,6 +51,10 @@ for s in subjects:
         error_model[i,:] = 1*(sdf['trial_Corr'].values != 1)
         identity_model[i,:] = 1*(sdf['cue'].values == sdf.iloc[i]['cue'] )
         rt_model[i,:] = abs(zrt[i]-zrt)
+        
+        if i >0:
+            response_repeat_model[i-1, i] = 1*(sdf.iloc[i]['Subject_Respo'] == sdf.iloc[i-1]['Subject_Respo'])
+            response_repeat_model[i, i-1] = 1*(sdf.iloc[i]['Subject_Respo'] == sdf.iloc[i-1]['Subject_Respo'])
 
         if isinstance(sdf.iloc[i].version, str): # this is the swap version of subjects, DSFC
             if sdf.iloc[i]['Texture'] == 'Donut':
@@ -91,6 +96,7 @@ for s in subjects:
     np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_condition_model.npy" %s, condition_model)    
     np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_error_model.npy" %s, error_model)    
     np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_rt_model.npy" %s, rt_model) 
+    np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/models/%s_response_repeat_model.npy" %s, response_repeat_model) 
 
 
 # end
