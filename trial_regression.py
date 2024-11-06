@@ -1,12 +1,9 @@
 import numpy as np
 import pandas as pd
-import nibabel as nib
 from datetime import datetime
-import seaborn as sns
-import matplotlib.pyplot as plt
 import statsmodels.formula.api as smf
-from statsmodels.stats.outliers_influence import variance_inflation_factor
 import scipy.linalg as linalg
+from joblib import Parallel, delayed
 
 ################################
 ## Fit RSA model to similarity matrices. use Argon
@@ -17,7 +14,7 @@ if __name__ == "__main__":
 
     now = datetime.now()
     print("Start time: ", now)
-    permute = False
+    permute = True
 
     #### setup
     ## relevant paths
@@ -31,12 +28,17 @@ if __name__ == "__main__":
     #                 "+ context:color + context:shape "
     #                 ]
     
-    #simple model
-    model_syntax = ["coef ~ 1 + context + task + response + color + shape + stim + feature + error"]
+    #model files to load
+    models = ["context", "color", "shape", "task", "response", "stim", "EDS", "IDS", "Stay", "condition", "feature", "feature_color", "feature_shape", "error", "identity", "rt", "response_repeat"]
     
+    #simple model
+    #model_syntax = ["coef ~ 1 + context + task + response + color + shape + stim + feature + error"]
+    model_syntax = ["coef ~ 1 + context + task  + feature_color + feature_shape + response_repeat+ identity:Stay"]
+        ## is there a way to select "context relevant features?"
+
     #task switch model
-    model_syntax = ["coef ~ 1 + context + task + response + color + shape + stim + feature + error" +
-                    "+ rt + rt*EDS*context + rt*IDS*feature + rt*EDS*feature + rt*IDS*context"]
+    #model_syntax = ["coef ~ 1 + context + task + response + color + shape + stim + feature + error" +
+    #                "+ rt + rt*EDS*context + rt*IDS*feature + rt*EDS*feature + rt*IDS*context"]
     num_permutations = 4096
 
     for s in [included_subjects]:
@@ -60,7 +62,6 @@ if __name__ == "__main__":
         print("number of usable cells from the trial by trial matrix: ", len(lower_triangle_usable_inds))
 
         # load models
-        models = ["context", "color", "shape", "task", "response", "stim", "EDS", "IDS", "condition", "feature", "error", "identity", "rt"]
         regressors = {}
         for m in models:
             regressors[m] = np.load(data_dir + "models/" + "%s_%s_model.npy" %(s, m))
@@ -74,7 +75,7 @@ if __name__ == "__main__":
             # for m in models:
             #     permute_results[m] = np.zeros((num_ROIs, 1000))
             df = pd.DataFrame()
-            df['coef'] = coef[r].flatten()[lower_triangle_usable_inds]
+            df['coef'] = coef[0].flatten()[lower_triangle_usable_inds]
             for m in models:
                 df[m] = regressors[m].flatten()[lower_triangle_usable_inds] - np.nanmean(regressors[m].flatten()[lower_triangle_usable_inds]) 
             
@@ -87,7 +88,7 @@ if __name__ == "__main__":
             # df["shape:IDS"] = df["shape"] * df["IDS"]
             #X = df[['context', 'task', 'response', 'color', 'shape',  "stim", 'EDS', 'IDS', 'condition', 'context:EDS', 'color:IDS', 'shape:IDS']]
             #X = np.column_stack((np.ones(len(X)), X))
-            df = df.dropna()
+            #df = df.dropna()
             model = smf.ols(formula = model_syntax[0], data=df)
             X = model.exog
             permuted_results = np.zeros((num_ROIs, X.shape[1],num_permutations)) 
@@ -111,7 +112,37 @@ if __name__ == "__main__":
                     permuted_results[:,:,p] = np.nan
            
             #save output
-            np.save(out_dir + "%s_%s_switch_permutated_stats.npy" %(s, coef_fn), permuted_results)
+            np.save(out_dir + "%s_%s_permutated_stats.npy" %(s, coef_fn), permuted_results)
+
+
+            ## this is the parallel version but mysteriorsly it is sig slower
+            # Y = coef.reshape(coef.shape[0], -1)[:, lower_triangle_usable_inds]
+            # #Y = model.endog
+            # Y = Y.T
+            # Y[np.isnan(Y)] = np.nanmean(Y)
+
+            # def permute_and_fit(p):
+            #     print("now permutation number: ", p + 1)
+
+            #     # permute X
+            #     np.random.seed(p)
+            #     random_inds = np.random.permutation(X.shape[0])
+            #     permuted_X = X[random_inds, :]
+
+            #     # run regression, use scipy to fit to all ROIs at once
+            #     try:
+            #         result, _, _, _ = linalg.lstsq(Y, permuted_X)
+            #     except:
+            #         result = np.nan * np.ones((num_ROIs, X.shape[1]))
+            #     return result
+
+            # results = Parallel(n_jobs=4)(delayed(permute_and_fit)(p) for p in np.arange(100))
+
+            # for p in np.arange(num_permutations):
+            #     permuted_results[:, :, p] = results[p]
+            
+            # # #save output
+            # np.save(out_dir + "%s_%s_permutated_stats.npy" %(s, coef_fn), permuted_results)
 
         #else:
         results = []
@@ -127,6 +158,7 @@ if __name__ == "__main__":
             model = smf.ols(formula = model_syntax[0], data=df).fit()
             
             #print(model.summary())
+            #from statsmodels.stats.outliers_influence import variance_inflation_factor
             #variance_inflation_factor(df, 0)
              
             tdf = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0].rename(columns={'P>|t|': 'pvalue'}).rename(columns={'index': 'parameter'})
@@ -135,7 +167,7 @@ if __name__ == "__main__":
             tdf = tdf.reset_index().rename(columns={'index': 'parameter'})
             results.append(tdf)
         results_df = pd.concat(results, ignore_index=True)    
-        results_df.to_csv(out_dir + "%s_%s_switch_stats.csv" %(s, coef_fn))       
+        results_df.to_csv(out_dir + "%s_%s_stats.csv" %(s, coef_fn))       
         # note, I have compared sm.ols and linalg.lstsq, they gave the same results
 
     now = datetime.now()
