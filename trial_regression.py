@@ -14,7 +14,7 @@ if __name__ == "__main__":
 
     now = datetime.now()
     print("Start time: ", now)
-    permute = True
+    permute = False
 
     #### setup
     ## relevant paths
@@ -33,12 +33,24 @@ if __name__ == "__main__":
     
     #simple model
     #model_syntax = ["coef ~ 1 + context + task + response + color + shape + stim + feature + error"]
-    model_syntax = ["coef ~ 1 + context + task  + feature_color + feature_shape + response_repeat+ identity:Stay"]
+    #model_syntax = ["coef ~ 1 + context + task  + feature_color + feature_shape + response_repeat+ identity:Stay"]
         ## is there a way to select "context relevant features?"
 
     #task switch model
-    #model_syntax = ["coef ~ 1 + context + task + response + color + shape + stim + feature + error" +
-    #                "+ rt + rt*EDS*context + rt*IDS*feature + rt*EDS*feature + rt*IDS*context"]
+
+    model_syntax = ["coef ~ 1 + context + task + response + feature_color + feature_shape + stim + error + " +
+                    "error*EDS*context + error*EDS*feature_color + error*EDS*feature_shape + error*IDS*context + error*IDS*feature_color + error*IDS*feature_shape + error*Stay*context + error*Stay*feature_color + error*Stay*feature_shape"]
+    
+    #model_syntax = ["coef ~ 0 + context + task + response + feature_color + feature_shape + stim + error + " +
+    #                "error*EDS*context + error*EDS*feature_color + error*EDS*feature_shape + error*IDS*context + error*IDS*feature_color + error*IDS*feature_shape + error*Stay*context + error*Stay*feature_color + error*Stay*feature_shape"]
+    
+    # model_syntax = ["coef ~ 0 + context + task + response + feature_color + feature_shape + stim + Stay*identity +" +
+    #                 "rt*EDS*context + rt*EDS*feature_color + rt*EDS*feature_shape + rt*IDS*context + rt*IDS*feature_color + rt*IDS*feature_shape + rt*Stay*context + rt*Stay*feature_color + rt*Stay*feature_shape + " +
+    #                 "error*EDS*context + error*EDS*feature_color + error*EDS*feature_shape + error*IDS*context + error*IDS*feature_color + error*IDS*feature_shape + error*Stay*context + error*Stay*feature_color + error*Stay*feature_shape"]
+    
+    # model_syntax = ["coef ~ 0 + context + task + response + feature_color + feature_shape + stim + Stay*identity + error +" +
+    #                  " EDS*context + EDS*feature_color + EDS*feature_shape + IDS*context + IDS*feature_color + IDS*feature_shape + Stay*context + Stay*feature_color + Stay*feature_shape"
+    #                  ]
     num_permutations = 4096
 
     for s in [included_subjects]:
@@ -63,6 +75,7 @@ if __name__ == "__main__":
 
         # load models
         regressors = {}
+
         for m in models:
             regressors[m] = np.load(data_dir + "models/" + "%s_%s_model.npy" %(s, m))
 
@@ -96,7 +109,7 @@ if __name__ == "__main__":
             for p in np.arange(num_permutations):
 
                 print("now permutation number: ", p+1)
-                Y = coef.reshape(coef.shape[0],-1)[:,lower_triangle_usable_inds]
+                Y = model.endog.reshape(coef.shape[0],-1)[lower_triangle_usable_inds]
                 Y = Y.T
                 Y[np.isnan(Y)] = np.nanmean(Y)
                 

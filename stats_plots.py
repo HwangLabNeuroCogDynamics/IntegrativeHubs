@@ -58,15 +58,16 @@ t_nulls = np.zeros((418,len(models),4096))
 
 # Use Parallel and delayed to parallelize the nested loops
 from joblib import Parallel, delayed
+
 def perform_ttest(r, v):
     return ttest_1samp(nulls[:, r, v, :], 0, axis=0, nan_policy='omit')[0]
 
 results = Parallel(n_jobs=-1)(delayed(perform_ttest)(r, v) for r in range(418) for v in range(len(models)))
 
 # Reshape the results and assign to t_nulls
+
 for idx, (r, v) in enumerate([(r, v) for r in range(418) for v in range(len(models))]):
     t_nulls[r, v, :] = results[idx]
-
 
 np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/t_nulls.npy", t_nulls)
 
@@ -78,73 +79,113 @@ np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/t_nulls
 # plt.show()
 ## remarkbly, the 97.5 percentile of the null seems to be around t=2, very similar to parametric test. But with some diff between ROIs, so perhaps ROI specific null is a good idea.
 
-### run stats using empirical p
-permutation_stats = []
-t_nulls = np.load("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/t_nulls.npy")
+### now figure out which cortical ROIs showed context, feature, decsion effects from Steph and Xitong's analyses...
+cdf = pd.read_csv("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/Activity_Flow/noise_ceiling/400ROIs_voxels/rsa_af/af/Context_59subs_ncaf_max.csv")
+context_rois = np.unique(cdf['roi'])[:-2]
+cdf = pd.read_csv("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/Activity_Flow/noise_ceiling/400ROIs_voxels/rsa_af/af/CxCO_59subs_ncaf_max.csv")
+color_rois = np.unique(cdf['roi'])[:-2]
+cdf = pd.read_csv("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/Activity_Flow/noise_ceiling/400ROIs_voxels/rsa_af/af/CxSH_59subs_ncaf_max.csv")
+shape_rois = np.unique(cdf['roi'])[:-2]
+cdf = pd.read_csv("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/Activity_Flow/noise_ceiling/400ROIs_voxels/rsa_af/af/Resp_59subs_ncaf_max.csv")
+decision_rois = np.unique(cdf['roi'])[:-2]
 
-for r in range(418): #results_df.ROI.unique()
-    for i, m in enumerate(models):
-        if i == 0: #no intercept
-            continue
-        else:
-            tdf = results_df.loc[(results_df['ROI']==r+1) & (results_df['parameter']==m)]
-            #model = smf.ols(formula="coef ~ 1", data=tdf).fit()
-            t_stat, _ = ttest_1samp(tdf['coef'], 0)
-            
-            ttdf = pd.DataFrame({
-                't-statistic': [t_stat],
-                'p-value': 1-(np.mean(t_stat>t_nulls[r,i,:].flatten())),
-                'mean': [np.nanmean(tdf['coef'])],
-                'ROI': r+1,
-                'model': m
-            })
-            permutation_stats.append(ttdf)    
+
+
+permutation_stats = []
+aadf = []
+bbdf = []
+for r in context_rois: #range(418): #results_df.ROI.unique()
+    a_model = 'EDS:context'
+    b_model = 'Stay:context'
+    adf = results_df.loc[(results_df['ROI']==int(r)) & (results_df['parameter']==a_model)]
+    adf = adf[~((adf['coef'] > 3) | (adf['coef'] < -3))] #drop outliers
+    bdf = results_df.loc[(results_df['ROI']==int(r)) & (results_df['parameter']==b_model)]
+    bdf = bdf[~((bdf['coef'] > 3) | (bdf['coef'] < -3))] #drop outliers    
+    
+    aadf.append(adf)
+    bbdf.append(bdf)
+aadf = pd.concat(aadf, ignore_index=True)
+bbdf = pd.concat(bbdf, ignore_index=True)
+
+adf = aadf.groupby("ROI").mean().reset_index()
+bdf = bbdf.groupby("ROI").mean().reset_index()
+t_stat, pvalue = ttest_rel(adf['coef'], bdf['coef'])
+        
+#     ttdf = pd.DataFrame({
+#         't-statistic': [t_stat],
+#         'p-value': [pvalue],
+#         'mean': [np.nanmean(adf['coef']) - np.nanmean(bdf['coef'])],
+#         'ROI': r,
+#         'model': a_model+"-"+b_model
+#     })
+#     permutation_stats.append(ttdf)    
+
+# permutation_stats_df = pd.concat(permutation_stats, ignore_index=True)
+#permutation_stats_df['q'] = fdrcorrection(permutation_stats_df['p-value'])[1]
+
+### run stats using empirical p
+#t_nulls = np.load("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/t_nulls.npy")
+
+permutation_stats = []
+for r in color_rois: #range(418): #results_df.ROI.unique()
+    for i, m in enumerate(["IDS:feature_color"]):
+        # if i == 0: #no intercept
+        #     continue
+        # else:
+        tdf = results_df.loc[(results_df['ROI']==int(r)) & (results_df['parameter']==m)]
+        tdf = tdf[~((tdf['coef'] > 3) | (tdf['coef'] < -3))] #drop outliers
+        #model = smf.ols(formula="coef ~ 1", data=tdf).fit()
+        t_stat, pvalue = ttest_1samp(tdf['coef'], 0)
+        
+        ttdf = pd.DataFrame({
+            't-statistic': [t_stat],
+            'p-value': [pvalue], #1-(np.mean(t_stat>t_nulls[r,i,:].flatten())),
+            'mean': [np.nanmean(tdf['coef'])],
+            'ROI': r,
+            'model': m
+        })
+        permutation_stats.append(ttdf)    
 permutation_stats_df = pd.concat(permutation_stats, ignore_index=True)
 permutation_stats_df['q'] = fdrcorrection(permutation_stats_df['p-value'])[1]
-permutation_stats_df.to_csv('/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/permutation_stats_df.csv')
+
+
+
+
+#permutation_stats_df.to_csv('/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/permutation_stats_df.csv')
 
 
 # create thresholded nii images
-
-permutation_stats_df = pd.read_csv("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/permutation_stats_df.csv")       
-thres_niis = {}
-for m in models:
-    if m != 'Intercept':
-        fn = '/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/niis/%s_t-statistic_thresholded.nii.gz' %m
-        metric = permutation_stats_df.loc[permutation_stats_df['model']== m]['t-statistic'].values
-        mask = permutation_stats_df.loc[permutation_stats_df['model']== m]['q'].values < .05
-        #mask[np.argsort(metric)[:-15]]=0
-        thres_niis[m] = write_stats_to_vol_yeo_template_nifti(metric * mask, fn, roisize = 400)
-        
-### create nii images
+# permutation_stats_df = pd.read_csv("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/permutation_stats_df.csv")       
+# thres_niis = {}
 # for m in models:
-#     fn = '/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/niis/%s_t-statistic.nii.gz' %m
-#     metric = permutation_stats_df.loc[permutation_stats_df['model']== m]['t-statistic'].values
-#     mask = 1
-#     write_stats_to_vol_yeo_template_nifti(metric * mask, fn, roisize = 418)
+#     if m != 'Intercept':
+#         fn = '/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/niis/%s_t-statistic_thresholded.nii.gz' %m
+#         metric = permutation_stats_df.loc[permutation_stats_df['model']== m]['t-statistic'].values
+#         mask = permutation_stats_df.loc[permutation_stats_df['model']== m]['q'].values < .05
+#         #mask[np.argsort(metric)[:-15]]=0
+#         thres_niis[m] = write_stats_to_vol_yeo_template_nifti(metric * mask, fn, roisize = 400)
 
-plotting.plot_glass_brain(thres_niis['context'], display_mode='lzry', plot_abs=False,
-                          title='', threshold=0.1)
-plt.show()
+# plotting.plot_glass_brain(thres_niis['context'], display_mode='lzry', plot_abs=False,
+#                           title='', threshold=0.1)
+# plt.show()
 
-plotting.plot_glass_brain(thres_niis['feature_shape'], display_mode='lzry', plot_abs=False,
-                          title='', threshold=0.1)
-plt.show()
+# plotting.plot_glass_brain(thres_niis['feature_shape'], display_mode='lzry', plot_abs=False,
+#                           title='', threshold=0.1)
+# plt.show()
 
-plotting.plot_glass_brain(thres_niis['feature_color'], display_mode='lzry', plot_abs=False,
-                          title='', threshold=0.1)
-plt.show()
+# plotting.plot_glass_brain(thres_niis['feature_color'], display_mode='lzry', plot_abs=False,
+#                           title='', threshold=0.1)
+# plt.show()
 
-plotting.plot_glass_brain(thres_niis['task'], display_mode='lzry', plot_abs=False,
-                        title='', threshold=2)
-plt.show()
+# plotting.plot_glass_brain(thres_niis['task'], display_mode='lzry', plot_abs=False,
+#                         title='', threshold=2)
+# plt.show()
 
-plotting.plot_glass_brain(thres_niis['response'], display_mode='lzry', plot_abs=False,
-                          title='', threshold=2)
-plt.show()
+# plotting.plot_glass_brain(thres_niis['response'], display_mode='lzry', plot_abs=False,
+#                           title='', threshold=2)
+# plt.show()
 
-
-permutation_stats_df.loc[permutation_stats_df['ROI']==405]
+# permutation_stats_df.loc[permutation_stats_df['ROI']==405]
 
 #compare to af results
 af_df = pd.read_csv('/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/Activity_Flow/noise_ceiling/400ROIs_voxels/af/59subs_ncaf_max.csv')
