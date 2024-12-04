@@ -45,39 +45,6 @@ for s in subjects:
 results_df = pd.concat(results, ignore_index=True)
 models = results_df.parameter.unique()
 
-### check null distribution
-nulls = np.zeros((59,418,len(models),4096)) #sub by roi by var by permutations
-for i, s in enumerate(subjects):
-    nulls[i,:,:,:] = np.load("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/%s_whole_brain_permutated_stats.npy" %s)
-
-
-t_nulls = np.zeros((418,len(models),4096))
-# for r in range(418):
-#     for v in range(len(models)):
-#         t_nulls[r, v, :], _ = ttest_1samp(nulls[:, r, v, :], 0, axis=0, nan_policy='omit')
-
-# Use Parallel and delayed to parallelize the nested loops
-from joblib import Parallel, delayed
-
-def perform_ttest(r, v):
-    return ttest_1samp(nulls[:, r, v, :], 0, axis=0, nan_policy='omit')[0]
-
-results = Parallel(n_jobs=-1)(delayed(perform_ttest)(r, v) for r in range(418) for v in range(len(models)))
-
-# Reshape the results and assign to t_nulls
-
-for idx, (r, v) in enumerate([(r, v) for r in range(418) for v in range(len(models))]):
-    t_nulls[r, v, :] = results[idx]
-
-np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/t_nulls.npy", t_nulls)
-
-# quick plot to take a look at null distribution
-# df = pd.DataFrame(t_nulls[:,4,:].T) 
-# plt.figure(figsize=(12, 8))
-# for col in np.arange(415,418):
-#     sns.histplot(df[col], bins=30, kde=False, alpha=0.3)
-# plt.show()
-## remarkbly, the 97.5 percentile of the null seems to be around t=2, very similar to parametric test. But with some diff between ROIs, so perhaps ROI specific null is a good idea.
 
 ### now figure out which cortical ROIs showed context, feature, decsion effects from Steph and Xitong's analyses...
 cdf = pd.read_csv("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/Activity_Flow/noise_ceiling/400ROIs_voxels/rsa_af/af/Context_59subs_ncaf_max.csv")
@@ -90,45 +57,9 @@ cdf = pd.read_csv("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/Activity_Flow/noise_
 decision_rois = np.unique(cdf['roi'])[:-2]
 
 
-
 permutation_stats = []
-aadf = []
-bbdf = []
-for r in context_rois: #range(418): #results_df.ROI.unique()
-    a_model = 'EDS:context'
-    b_model = 'Stay:context'
-    adf = results_df.loc[(results_df['ROI']==int(r)) & (results_df['parameter']==a_model)]
-    adf = adf[~((adf['coef'] > 3) | (adf['coef'] < -3))] #drop outliers
-    bdf = results_df.loc[(results_df['ROI']==int(r)) & (results_df['parameter']==b_model)]
-    bdf = bdf[~((bdf['coef'] > 3) | (bdf['coef'] < -3))] #drop outliers    
-    
-    aadf.append(adf)
-    bbdf.append(bdf)
-aadf = pd.concat(aadf, ignore_index=True)
-bbdf = pd.concat(bbdf, ignore_index=True)
-
-adf = aadf.groupby("ROI").mean().reset_index()
-bdf = bbdf.groupby("ROI").mean().reset_index()
-t_stat, pvalue = ttest_rel(adf['coef'], bdf['coef'])
-        
-#     ttdf = pd.DataFrame({
-#         't-statistic': [t_stat],
-#         'p-value': [pvalue],
-#         'mean': [np.nanmean(adf['coef']) - np.nanmean(bdf['coef'])],
-#         'ROI': r,
-#         'model': a_model+"-"+b_model
-#     })
-#     permutation_stats.append(ttdf)    
-
-# permutation_stats_df = pd.concat(permutation_stats, ignore_index=True)
-#permutation_stats_df['q'] = fdrcorrection(permutation_stats_df['p-value'])[1]
-
-### run stats using empirical p
-#t_nulls = np.load("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/t_nulls.npy")
-
-permutation_stats = []
-for r in color_rois: #range(418): #results_df.ROI.unique()
-    for i, m in enumerate(["IDS:feature_color"]):
+for r in decision_rois: #range(418): #results_df.ROI.unique()
+    for i, m in enumerate(["context"]):
         # if i == 0: #no intercept
         #     continue
         # else:
@@ -327,5 +258,61 @@ fig.show()
 # 2404     0.515502  0.299857  0.000142  401  context:shape  0.449786
 # 2405     1.624831  0.054565  0.000374  401       identity  0.144509
 
+### graveyard stuff
+################################################################
+######## check null distribution
+# nulls = np.zeros((59,418,len(models),4096)) #sub by roi by var by permutations
+# for i, s in enumerate(subjects):
+#     nulls[i,:,:,:] = np.load("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/%s_whole_brain_permutated_stats.npy" %s)
+
+
+# t_nulls = np.zeros((418,len(models),4096))
+# # for r in range(418):
+# #     for v in range(len(models)):
+# #         t_nulls[r, v, :], _ = ttest_1samp(nulls[:, r, v, :], 0, axis=0, nan_policy='omit')
+
+# # Use Parallel and delayed to parallelize the nested loops
+# from joblib import Parallel, delayed
+
+# def perform_ttest(r, v):
+#     return ttest_1samp(nulls[:, r, v, :], 0, axis=0, nan_policy='omit')[0]
+
+# results = Parallel(n_jobs=-1)(delayed(perform_ttest)(r, v) for r in range(418) for v in range(len(models)))
+
+# # Reshape the results and assign to t_nulls
+
+# for idx, (r, v) in enumerate([(r, v) for r in range(418) for v in range(len(models))]):
+#     t_nulls[r, v, :] = results[idx]
+
+# np.save("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/t_nulls.npy", t_nulls)
+
+# # quick plot to take a look at null distribution
+# # df = pd.DataFrame(t_nulls[:,4,:].T) 
+# # plt.figure(figsize=(12, 8))
+# # for col in np.arange(415,418):
+# #     sns.histplot(df[col], bins=30, kde=False, alpha=0.3)
+# # plt.show()
+# ## remarkbly, the 97.5 percentile of the null seems to be around t=2, very similar to parametric test. But with some diff between ROIs, so perhaps ROI specific null is a good idea.
+
+######## comparison between regresors
+# permutation_stats = []
+# aadf = []
+# bbdf = []
+# for r in context_rois: #range(418): #results_df.ROI.unique()
+#     a_model = 'EDS:context'
+#     b_model = 'Stay:context'
+#     adf = results_df.loc[(results_df['ROI']==int(r)) & (results_df['parameter']==a_model)]
+#     adf = adf[~((adf['coef'] > 3) | (adf['coef'] < -3))] #drop outliers
+#     bdf = results_df.loc[(results_df['ROI']==int(r)) & (results_df['parameter']==b_model)]
+#     bdf = bdf[~((bdf['coef'] > 3) | (bdf['coef'] < -3))] #drop outliers    
+    
+#     aadf.append(adf)
+#     bbdf.append(bdf)
+# aadf = pd.concat(aadf, ignore_index=True)
+# bbdf = pd.concat(bbdf, ignore_index=True)
+
+# adf = aadf.groupby("ROI").mean().reset_index()
+# bdf = bbdf.groupby("ROI").mean().reset_index()
+# t_stat, pvalue = ttest_rel(adf['coef'], bdf['coef'])
 
 #end
