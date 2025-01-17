@@ -76,7 +76,7 @@ if __name__ == "__main__":
         
         #load LSS data
         print("\nloading LSS for subject ", s)
-        cur_lss_nii = nib.load( os.path.join(data_dr, ("sub-%s" %s),  ("cue.LSS.nii.gz")) )
+        cur_lss_nii = nib.load( os.path.join(data_dr, ("sub-%s" %s),  ("cue.3dT.LSS.nii.gz")) )
         num_trials = int(cur_lss_nii.shape[3]/2)
 
         #load errts file
