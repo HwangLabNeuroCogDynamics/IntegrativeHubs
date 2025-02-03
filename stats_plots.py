@@ -340,8 +340,8 @@ plot_RSA_coef('Decision', decision_rois, models_to_plot)
 #permutation_stats_df = pd.concat(permutation_stats, ignore_index=True)
 #permutation_stats_df['q'] = fdrcorrection(permutation_stats_df['p-value'])[1]
 
-# ######################
-# ### run parametric stats on switch effects
+######################
+### run parametric stats on switch effects
 # data_dir =  '/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/'
 # subjects = pd.read_csv("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/3dDeconvolve_fdpt4/usable_subjs.csv")['sub']
 # roi_fn = "whole_brain"
@@ -352,43 +352,47 @@ plot_RSA_coef('Decision', decision_rois, models_to_plot)
 # results_df = pd.concat(results, ignore_index=True)
 # models = results_df.parameter.unique()
 
-# stats = []
-# for r in results_df.ROI.unique():
-#     for m in models:
-#         tdf = results_df.loc[(results_df['ROI']==r) & (results_df['parameter']==m)]
-#         #model = smf.ols(formula="coef ~ 1", data=tdf).fit()
-#         t_stat, p_value = ttest_1samp(tdf['coef'], 0)
-#         ttdf = pd.DataFrame({
-#             't-statistic': [t_stat],
-#             'p-value': [p_value],
-#             'mean': [np.nanmean(tdf['coef'])],
-#             'ROI': r,
-#             'model': m
-#         })
-#         stats.append(ttdf)    
-# stats_df = pd.concat(stats, ignore_index=True)
+stats = []
+for r in results_df.ROI.unique():
+    for m in models:
+        tdf = results_df.loc[(results_df['ROI']==r) & (results_df['parameter']==m)]
+        #model = smf.ols(formula="coef ~ 1", data=tdf).fit()
+        t_stat, p_value = ttest_1samp(tdf['coef'], 0)
+        ttdf = pd.DataFrame({
+            't-statistic': [t_stat],
+            'p-value': [p_value],
+            'mean': [np.nanmean(tdf['coef'])],
+            'ROI': r,
+            'model': m
+        })
+        stats.append(ttdf)    
+stats_df = pd.concat(stats, ignore_index=True)
 
-# # FDR correction
-# stats_df['q'] = fdrcorrection(stats_df['p-value'])[1]
-# #stats_df.to_csv('/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/group_stats.csv')
+# FDR correction
+stats_df['q'] = fdrcorrection(stats_df['p-value'])[1]
+#stats_df.to_csv('/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/stats/group_stats.csv')
 
-# # create thresholded nii images      
-# thres_niis = {}
-# for m in models:
-#     if m != 'Intercept':
-#         fn = '/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/niis/%s_switch_t-statistic_thresholded.nii.gz' %m
-#         metric = stats_df.loc[stats_df['model']== m]['t-statistic'].values
-#         mask = stats_df.loc[stats_df['model']== m]['q'].values < .05
-#         mask[np.argsort(abs(metric))[:-3]]=0
-#         thres_niis[m] = write_stats_to_vol_yeo_template_nifti(metric * mask, fn, roisize = 400)
+# create thresholded nii images      
+thres_niis = {}
+for m in models:
+    if m != 'Intercept':
+        fn = '/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/niis/%s_switch_t-statistic_thresholded.nii.gz' %m
+        metric = stats_df.loc[stats_df['model']== m]['t-statistic'].values
+        mask = stats_df.loc[stats_df['model']== m]['q'].values < .05
+        #mask[np.argsort(abs(metric))[:-3]]=0
+        thres_niis[m] = write_stats_to_vol_yeo_template_nifti(metric * mask, fn, roisize = 400)
         
-# plotting.plot_glass_brain(thres_niis['context'], display_mode='lzry', plot_abs=False,
-#                           title='', threshold=2)
-# plt.show()
+plotting.plot_glass_brain(thres_niis['context'], display_mode='lzry', plot_abs=False,
+                          title='', threshold=2)
+plt.show()
 
-# plotting.plot_glass_brain(thres_niis['EDS:context'], display_mode='lzry', plot_abs=False,
-#                           title='', threshold=2)
-# plt.show()
+plotting.plot_glass_brain(thres_niis['feature_shape'], display_mode='lzry', plot_abs=False,
+                          title='', threshold=2)
+plt.show()
+
+plotting.plot_glass_brain(thres_niis['error'], display_mode='lzry', plot_abs=False,
+                          title='', threshold=2)
+plt.show()
 
 # plotting.plot_glass_brain(thres_niis['rt:EDS'], display_mode='lzry', plot_abs=False,
 #                           title='', threshold=2)
