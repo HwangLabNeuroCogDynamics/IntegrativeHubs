@@ -110,6 +110,3 @@ np.save(outfn, coef_mat)
 print('Saved:', outfn)  # the end result is trial by time by time matrix of correlations
 
 
-
-##### some kind of statistics here...
-
