@@ -69,7 +69,7 @@ def ds_regression_roi_per_subject(roi, data_dir, df, subjects, model_syntax):
         ds = np.zeros(num_trials)
         for t1 in np.arange(num_trials - 1):  # make sure it is distance from the "previous" trial
             t2 = t1 + 1
-            ds[t2] = data[roi - 1, t1, t2]
+            ds[t2] = data[roi, t1, t2] #the roi is zero based here
         ds = np.sqrt(2 * (1 - ds))  # Correlation distance
 
         # Build DataFrame for regression
@@ -120,7 +120,6 @@ def ds_regression_roi_per_subject(roi, data_dir, df, subjects, model_syntax):
     return results
 
 # Function to perform second-level statistics
-
 def group_level_stats_flexible(results_df, param1, param2=None, roisize=418):
     """
     Perform group-level statistics (one-sample t-test or paired t-test) for given regressors.
@@ -208,60 +207,14 @@ subjects = pd.read_csv("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/3dDeconvolve_fd
 # Run main effect model
 ########################
 model_syntax = "ds ~ 0 + Stay:Cue_repeat + Stay:Cue_switch + IDS + EDS + Response_repeat + Task_repeat "
-results_list = Parallel(n_jobs=10)(delayed(ds_regression_roi_per_subject)(roi, data_dir, df, subjects, model_syntax) for roi in np.arange(418))
+results_list = Parallel(n_jobs=24)(delayed(ds_regression_roi_per_subject)(roi, data_dir, df, subjects, model_syntax) for roi in np.arange(418))
 # Flatten the list of lists
 results_list = [item for sublist in results_list for item in sublist]
 # Create a DataFrame from the results
 results_df = pd.DataFrame(results_list)
 # Save the results to a CSV file
 results_df.to_csv("/home/kahwang/bin/IntegrativeHubs/data/ds_regression_main_effect.csv", index=False)
-results_df = pd.read_csv("/home/kahwang/bin/IntegrativeHubs/data/ds_regression_main_effect.csv")
-
-# group stats, key contrasts are EDS v IDS and IDS v Stay, eventually, look into cue repeat and resposnse repeat?
-param = 'EDS'
-group_coefficients, group_t_values = group_level_stats_flexible(results_df, param)
-write_group_stats_to_nifti(group_coefficients, group_t_values, f"/home/kahwang/bin/IntegrativeHubs/data/{param}")
-
-param = 'IDS'
-group_coefficients, group_t_values = group_level_stats_flexible(results_df, param)
-write_group_stats_to_nifti(group_coefficients, group_t_values, f"/home/kahwang/bin/IntegrativeHubs/data/{param}")
-
-param = 'Stay:Cue_repeat'
-group_coefficients, group_t_values = group_level_stats_flexible(results_df, param)
-write_group_stats_to_nifti(group_coefficients, group_t_values, f"/home/kahwang/bin/IntegrativeHubs/data/{param}")
-
-param = 'Stay:Cue_switch'
-group_coefficients, group_t_values = group_level_stats_flexible(results_df, param)
-write_group_stats_to_nifti(group_coefficients, group_t_values, f"/home/kahwang/bin/IntegrativeHubs/data/{param}")
-
-param1 = 'EDS'
-param2 = 'IDS'
-group_coefficients_diff, group_t_values_diff = group_level_stats_flexible(results_df, param1, param2)
-write_group_stats_to_nifti(group_coefficients_diff, group_t_values_diff, f"/home/kahwang/bin/IntegrativeHubs/data/{param1}_vs_{param2}")
-
-param1 = 'IDS'
-param2 = 'Stay:Cue_switch'
-group_coefficients_diff, group_t_values_diff = group_level_stats_flexible(results_df, param1, param2)
-write_group_stats_to_nifti(group_coefficients_diff, group_t_values_diff, f"/home/kahwang/bin/IntegrativeHubs/data/{param1}_vs_{param2}")
-
-param1 = 'IDS'
-param2 = 'Stay:Cue_repeat'
-group_coefficients_diff, group_t_values_diff = group_level_stats_flexible(results_df, param1, param2)
-write_group_stats_to_nifti(group_coefficients_diff, group_t_values_diff, f"/home/kahwang/bin/IntegrativeHubs/data/{param1}_vs_{param2}")
-
-
-param1 = 'Stay:Cue_switch'
-param2 = 'Stay:Cue_repeat'
-group_coefficients_diff, group_t_values_diff = group_level_stats_flexible(results_df, param1, param2)
-write_group_stats_to_nifti(group_coefficients_diff, group_t_values_diff, f"/home/kahwang/bin/IntegrativeHubs/data/{param1}_vs_{param2}")
-
-param = 'Response_repeat'
-group_coefficients, group_t_values = group_level_stats_flexible(results_df, param)
-write_group_stats_to_nifti(group_coefficients, group_t_values, f"/home/kahwang/bin/IntegrativeHubs/data/{param}")
-
-param = 'Task_repeat'
-group_coefficients, group_t_values = group_level_stats_flexible(results_df, param)
-write_group_stats_to_nifti(group_coefficients, group_t_values, f"/home/kahwang/bin/IntegrativeHubs/data/{param}")
+#results_df = pd.read_csv("/home/kahwang/bin/IntegrativeHubs/data/ds_regression_main_effect.csv")
 
 
 ########################
@@ -272,27 +225,6 @@ results_list = Parallel(n_jobs=16)(delayed(ds_regression_roi_per_subject)(roi, d
 results_list = [item for sublist in results_list for item in sublist]
 results_df = pd.DataFrame(results_list)
 results_df.to_csv("/home/kahwang/bin/IntegrativeHubs/data/ds_regression_cue_task_switch.csv", index=False)
-results_df = pd.read_csv("/home/kahwang/bin/IntegrativeHubs/data/ds_regression_cue_task_switch.csv")
-
-param1 = 'EDS:Task_switch'
-param2 = 'EDS:Task_repeat'
-group_coefficients_diff, group_t_values_diff = group_level_stats_flexible(results_df, param1, param2)
-write_group_stats_to_nifti(group_coefficients_diff, group_t_values_diff, f"/home/kahwang/bin/IntegrativeHubs/data/{param1}_vs_{param2}")
-
-param1 = 'EDS:Task_repeat'
-param2 = 'IDS:Task_switch'
-group_coefficients_diff, group_t_values_diff = group_level_stats_flexible(results_df, param1, param2)
-write_group_stats_to_nifti(group_coefficients_diff, group_t_values_diff, f"/home/kahwang/bin/IntegrativeHubs/data/{param1}_vs_{param2}")
-
-param1 = 'EDS:Task_switch'
-param2 = 'IDS:Task_switch'
-group_coefficients_diff, group_t_values_diff = group_level_stats_flexible(results_df, param1, param2)
-write_group_stats_to_nifti(group_coefficients_diff, group_t_values_diff, f"/home/kahwang/bin/IntegrativeHubs/data/{param1}_vs_{param2}")
-
-param1 = 'EDS:Task_repeat'
-param2 = 'Stay:Cue_repeat'
-group_coefficients_diff, group_t_values_diff = group_level_stats_flexible(results_df, param1, param2)
-write_group_stats_to_nifti(group_coefficients_diff, group_t_values_diff, f"/home/kahwang/bin/IntegrativeHubs/data/{param1}_vs_{param2}")
 
 
 ########################
@@ -310,95 +242,29 @@ model_syntax = (
     "EDS:Task_repeat:Response_switch + "
     "EDS:Task_switch:Response_switch "
 )
-
 results_list = Parallel(n_jobs=20)(delayed(ds_regression_roi_per_subject)(roi, data_dir, df, subjects, model_syntax) for roi in np.arange(418))
 results_list = [item for sublist in results_list for item in sublist]
 results_df = pd.DataFrame(results_list)
 results_df.to_csv("/home/kahwang/bin/IntegrativeHubs/data/ds_regression_cue_task_response_switch.csv", index=False)
-results_df = pd.read_csv("/home/kahwang/bin/IntegrativeHubs/data/ds_regression_cue_task_response_switch.csv")
 
-# rule switch effect
-param1 = 'EDS:Task_repeat:Response_repeat'
-param2 = 'Stay:Cue_repeat:Response_repeat'
-group_coefficients_diff, group_t_values_diff = group_level_stats_flexible(results_df, param1, param2)
-write_group_stats_to_nifti(group_coefficients_diff, group_t_values_diff, f"/home/kahwang/bin/IntegrativeHubs/data/{param1}_vs_{param2}")
-
-param1 = 'EDS:Task_switch:Response_repeat'
-param2 = 'IDS:Task_switch:Response_repeat'
-group_coefficients_diff, group_t_values_diff = group_level_stats_flexible(results_df, param1, param2)
-write_group_stats_to_nifti(group_coefficients_diff, group_t_values_diff, f"/home/kahwang/bin/IntegrativeHubs/data/{param1}_vs_{param2}")
-
-# clean response effect
-param1 = 'Stay:Cue_repeat:Response_switch'
-param2 = 'Stay:Cue_repeat:Response_repeat'
-group_coefficients_diff, group_t_values_diff = group_level_stats_flexible(results_df, param1, param2)
-write_group_stats_to_nifti(group_coefficients_diff, group_t_values_diff, f"/home/kahwang/bin/IntegrativeHubs/data/{param1}_vs_{param2}")
-
-#clean task switch effect
-param1 = 'IDS:Task_switch:Response_repeat'
-param2 = 'Stay:Cue_switch:Response_repeat'
-group_coefficients_diff, group_t_values_diff = group_level_stats_flexible(results_df, param1, param2)
-write_group_stats_to_nifti(group_coefficients_diff, group_t_values_diff, f"/home/kahwang/bin/IntegrativeHubs/data/{param1}_vs_{param2}")
-
-param1 = 'EDS:Task_switch:Response_repeat'
-param2 = 'EDS:Task_repeat:Response_repeat'
-group_coefficients_diff, group_t_values_diff = group_level_stats_flexible(results_df, param1, param2)
-write_group_stats_to_nifti(group_coefficients_diff, group_t_values_diff, f"/home/kahwang/bin/IntegrativeHubs/data/{param1}_vs_{param2}")
 
 ########################
 # Model 2, understand the effect of accuracy
 ########################
-
 model_syntax = "ds ~ 0 + Stay:Cue_repeat + Stay:Cue_switch + IDS + EDS + Stay:Accu + IDS:Accu + EDS:Accu + Stay:Cue_repeat:Accu + Stay:Cue_switch:Accu"
 results_list = Parallel(n_jobs=10)(delayed(ds_regression_roi_per_subject)(roi, data_dir, df, subjects, model_syntax) for roi in np.arange(418))
 results_list = [item for sublist in results_list for item in sublist]
 results_df = pd.DataFrame(results_list)
-results_df.to_csv("/home/kahwang/bin/IntegrativeHubs/data/ds_regression_accu_effect.csv", index=False)
 
-#####
-param1 = 'EDS:Accu'
-group_coefficients_diff, group_t_values_diff = group_level_stats_flexible(results_df, param1)
-write_group_stats_to_nifti(group_coefficients_diff, group_t_values_diff, f"/home/kahwang/bin/IntegrativeHubs/data/{param1}")
-
-param1 = 'IDS:Accu'
-group_coefficients_diff, group_t_values_diff = group_level_stats_flexible(results_df, param1)
-write_group_stats_to_nifti(group_coefficients_diff, group_t_values_diff, f"/home/kahwang/bin/IntegrativeHubs/data/{param1}")
-
-param1 = 'Stay:Cue_switch:Accu'
-group_coefficients_diff, group_t_values_diff = group_level_stats_flexible(results_df, param1)
-write_group_stats_to_nifti(group_coefficients_diff, group_t_values_diff, f"/home/kahwang/bin/IntegrativeHubs/data/{param1}")
-
-param1 = 'Stay:Cue_repeat:Accu'
-group_coefficients_diff, group_t_values_diff = group_level_stats_flexible(results_df, param1)
-write_group_stats_to_nifti(group_coefficients_diff, group_t_values_diff, f"/home/kahwang/bin/IntegrativeHubs/data/{param1}")
 
 ########################
 # Model 3, understand the effect of RT
 ########################
-
 model_syntax = "ds ~ 0 + Stay:Cue_repeat + Stay:Cue_switch + IDS + EDS + Response_repeat + Task_repeat + Stay:Cue_repeat:RT + Stay:Cue_switch:RT + IDS:RT + EDS:RT"
 results_list = Parallel(n_jobs=8)(delayed(ds_regression_roi_per_subject)(roi, data_dir, df, subjects, model_syntax) for roi in np.arange(418))
 results_list = [item for sublist in results_list for item in sublist]
 results_df = pd.DataFrame(results_list)
 results_df.to_csv("/home/kahwang/bin/IntegrativeHubs/data/ds_regression_rt_effect.csv", index=False)
-results_df = pd.read_csv("/home/kahwang/bin/IntegrativeHubs/data/ds_regression_rt_effect.csv")
-
-param = 'EDS:RT'
-group_coefficients, group_t_values = group_level_stats_flexible(results_df, param)
-write_group_stats_to_nifti(group_coefficients, group_t_values, f"/home/kahwang/bin/IntegrativeHubs/data/{param}")
-
-param = 'IDS:RT'
-group_coefficients, group_t_values = group_level_stats_flexible(results_df, param)
-write_group_stats_to_nifti(group_coefficients, group_t_values, f"/home/kahwang/bin/IntegrativeHubs/data/{param}")
-
-param = 'Stay:Cue_switch:RT'
-group_coefficients, group_t_values = group_level_stats_flexible(results_df, param)
-write_group_stats_to_nifti(group_coefficients, group_t_values, f"/home/kahwang/bin/IntegrativeHubs/data/{param}")
-
-param = 'Stay:Cue_repeat:RT'
-group_coefficients, group_t_values = group_level_stats_flexible(results_df, param)
-write_group_stats_to_nifti(group_coefficients, group_t_values, f"/home/kahwang/bin/IntegrativeHubs/data/{param}")
-
 
 
 ########################
