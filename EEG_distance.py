@@ -48,6 +48,50 @@ def compute_inv_shrunk_covariance(x):
     
     return inv_sigma
 
+def polynomial_kernel_distance(x1, x2):
+    """
+    Compute the distance between two patterns in the high-dimensional space
+    induced by the polynomial kernel defined as:
+    
+        K(a, b) = (a · b')^2
+    
+    where a and b are row vectors. The corresponding distance is:
+    
+        distance(x1, x2) = sqrt( K(x1, x1) + K(x2, x2) - 2 * K(x1, x2) )
+        
+    Parameters
+    ----------
+    x1 : array_like of shape (n_features,)
+        First pattern (row vector).
+    x2 : array_like of shape (n_features,)
+        Second pattern (row vector).
+        
+    Returns
+    -------
+    float
+        The distance between x1 and x2 in the high-dimensional space.
+    
+    Example
+    -------
+    >>> x1 = np.array([1, 2, 3])
+    >>> x2 = np.array([4, 5, 6])
+    >>> dist = polynomial_kernel_distance(x1, x2)
+    >>> print(dist)
+    """
+    # Compute the polynomial kernel values.
+    # For vectors a and b, K(a, b) = (a dot b) ^ 2.
+    K_x1x1 = np.dot(x1, x1) ** 2
+    K_x2x2 = np.dot(x2, x2) ** 2
+    K_x1x2 = np.dot(x1, x2) ** 2
+    
+    # Compute the squared distance.
+    distance_sq = K_x1x1 + K_x2x2 - 2 * K_x1x2
+    
+    # Avoid numerical issues: ensure we don't take the sqrt of a negative number.
+    distance_sq = max(distance_sq, 0)
+    
+    return np.sqrt(distance_sq)
+
 ROOT = '/Shared/lss_kahwang_hpc/ThalHi_data/'
 sub = input()  
 this_sub_path=ROOT+ 'eeg_preproc_RespToReviewers/' +str(sub)
@@ -69,7 +113,6 @@ for t in np.arange(len(times)):
     channel_x_trials_corrected[:,:, t] = np.dot(inv_sigma_epochs[:,:,t],channel_x_trials)
 
 
-
 def compute_trial_corr(trial, times, channel_data):
     """
     Compute the correlation matrix for a single trial.
@@ -88,8 +131,10 @@ def compute_trial_corr(trial, times, channel_data):
         for t2 in range(n_times):
             x = channel_data[:, trial, t1]
             y = channel_data[:, trial + 1, t2]
-            coefs[t1, t2] = np.corrcoef(x, y)[0, 1]
+            coefs[t1, t2] = polynomial_kernel_distance(x, y)
+            #coefs[t1, t2] = np.corrcoef(x, y)[0, 1]
     return coefs
+
 
 n_trials = epoch_data.shape[0] - 1
 n_times = len(times)
