@@ -75,8 +75,8 @@ coef_mat[0].fill(np.nan)
 
 ##### some kind of statistics here...
 #we will do it acroos the time x time grid. 
-ds = np.sqrt(2 * (1 - coef_mat))  # Correlation distance
-
+#ds = np.sqrt(2 * (1 - coef_mat))  # Correlation distance
+ds = coef_mat
 ## within subject regression
 def process_regression(t1, t2, model_syntax = "ds ~ 0 + Stay:Cue_repeat + Stay:Cue_switch + " "IDS:Task_repeat + IDS:Task_switch + " "EDS:Task_repeat + EDS:Task_switch + Response_repeat"):
     """
