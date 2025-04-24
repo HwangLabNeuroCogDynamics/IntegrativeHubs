@@ -38,7 +38,7 @@ def ds_regression_roi_per_subject(roi, data_dir, df, subjects, model_syntax):
 
     for s in subjects:
         # Load neural correlation distance
-        data = np.load(data_dir + f"{s}_whole_brain_coef.npy")  # ROI by trial by trial
+        data = np.load(data_dir + f"{s}_whole_brain_rtcov_coef.npy")  # ROI by trial by trial
 
         num_trials = data.shape[2]
         run_breaks = np.arange(0, num_trials, 51)
@@ -207,7 +207,7 @@ subjects = pd.read_csv("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/3dDeconvolve_fd
 # Run main effect model
 ########################
 model_syntax = "ds ~ 0 + Stay:Cue_repeat + Stay:Cue_switch + IDS + EDS + Response_repeat + Task_repeat "
-results_list = Parallel(n_jobs=24)(delayed(ds_regression_roi_per_subject)(roi, data_dir, df, subjects, model_syntax) for roi in np.arange(418))
+results_list = Parallel(n_jobs=32)(delayed(ds_regression_roi_per_subject)(roi, data_dir, df, subjects, model_syntax) for roi in np.arange(418))
 # Flatten the list of lists
 results_list = [item for sublist in results_list for item in sublist]
 # Create a DataFrame from the results
@@ -215,6 +215,11 @@ results_df = pd.DataFrame(results_list)
 # Save the results to a CSV file
 results_df.to_csv("/home/kahwang/bin/IntegrativeHubs/data/ds_regression_main_effect.csv", index=False)
 #results_df = pd.read_csv("/home/kahwang/bin/IntegrativeHubs/data/ds_regression_main_effect.csv")
+
+param1 = 'EDS'
+param2 = 'IDS'
+group_coefficients_diff, group_t_values_diff = group_level_stats_flexible(results_df, param1, param2)
+write_group_stats_to_nifti(group_coefficients_diff, group_t_values_diff, f"/home/kahwang/bin/IntegrativeHubs/data/{param1}_vs_{param2}")
 
 
 ########################

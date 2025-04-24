@@ -76,7 +76,7 @@ if __name__ == "__main__":
         
         #load LSS data
         print("\nloading LSS for subject ", s)
-        cur_lss_nii = nib.load( os.path.join(data_dr, ("sub-%s" %s),  ("cue.3dT.LSS.nii.gz")) )
+        cur_lss_nii = nib.load( os.path.join(data_dr, ("sub-%s" %s),  ("cue_rtcov_IM.LSS.nii.gz")) ) #cue.3dT.LSS.nii.gz is the LSS without RT covariate
         num_trials = int(cur_lss_nii.shape[3]/2)
 
         #load errts file
@@ -177,7 +177,7 @@ if __name__ == "__main__":
 
         #sub_x_roi_x_coeff[j,:,:,:] = roi_x_coeff
         #save output
-        np.save(out_dir+"coefs/%s_%s_coef.npy" %(s, roi_fn), roi_x_coeff)
+        np.save(out_dir+"coefs/%s_%s_rtcov_coef.npy" %(s, roi_fn), roi_x_coeff)
         
         ### the next step is regression onto RSA models...
 
