@@ -145,7 +145,7 @@ def ds_regression_roi_mixed(roi, data_dir, behav_df, subjects, model_syntax):
 #load behavioral data
 data_dir =  '/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/coefs/'
 nii_dir = "/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/3dDeconvolve_fdpt4/"
-output_dir = "/home/kahwang/bin/IntegrativeHubs/data"
+output_dir = "/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/"
 
 #this is I gather that is from Xitong's fixes
 #df = pd.read_csv("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/ThalHi_MRI_2020_RTs.csv") # this includes unusable subjects, totoal 74
