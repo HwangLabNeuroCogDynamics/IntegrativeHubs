@@ -200,7 +200,7 @@ batch_compute_ds_npz(subjects, data_dir, data_dir)
 df = pd.read_csv("/home/kahwang/bin/IntegrativeHubs/data/ThalHi_MRI_zRTs_full.csv")
 
 # now this is the model parallels the RT analysis
-model_syntax = "ds ~ zRT* C(Trial_type, Treatment(reference='Stay')) * perceptual_change +  C(response_repeat) + C(task_repeat) * C(prev_target_feature_match , Treatment(reference='switch_target_feature'))"
+model_syntax = "ds ~ C(Trial_type, Treatment(reference='Stay')) * perceptual_change +  C(response_repeat) + C(task_repeat) * C(prev_target_feature_match , Treatment(reference='switch_target_feature'))"
 results_list = Parallel(n_jobs=24)(delayed(ds_regression_roi_mixed)(roi, data_dir, df, subjects, model_syntax) for roi in np.arange(418))
 results_list = [item for sublist in results_list for item in sublist]
 results_df = pd.DataFrame(results_list)
