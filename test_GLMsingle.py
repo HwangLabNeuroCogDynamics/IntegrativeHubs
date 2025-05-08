@@ -12,6 +12,7 @@ import pandas as pd
 from joblib import Parallel, delayed
 import pandas as pd
 import subprocess
+import re
 
 def voxelwise_glm( Y, design_df, formula, masker: NiftiMasker, out_dir: str, prefix: str, n_jobs: int = 24 ):
     """
@@ -22,9 +23,10 @@ def voxelwise_glm( Y, design_df, formula, masker: NiftiMasker, out_dir: str, pre
     formula     : use 'y' as the dependent var, e.g. 'y ~ RT_z + Trial_type'
     masker      : fitted NiftiMasker
     out_dir     : where to write your maps
-    prefix      : filename prefix for each map
+    prefix      : filename prefix for each map, here we should use the subject ID
     n_jobs      : number of parallel jobs (24)
     """
+
     # ensure out_dir exists
     #os.makedirs(out_dir, exist_ok=True)
 
@@ -63,19 +65,24 @@ def voxelwise_glm( Y, design_df, formula, masker: NiftiMasker, out_dir: str, pre
     # --- 4) inverse‐transform & save maps ---
     print(term_names)
     for i, name in enumerate(term_names):
+        safe_name = make_safe(name)
         # beta map
         img_b = masker.inverse_transform(betas[i, :])
-        fout_b = os.path.join(out_dir, f"{prefix}_{name}_beta.nii.gz")
+        fout_b = os.path.join(out_dir, f"{prefix}_{safe_name}_beta.nii.gz")
         img_b.to_filename(fout_b)
         print("Wrote", fout_b)
 
         # t‐stat map
         img_t = masker.inverse_transform(tstats[i, :])
-        fout_t = os.path.join(out_dir, f"{prefix}_{name}_tstat.nii.gz")
+        fout_t = os.path.join(out_dir, f"{prefix}_{safe_name}_tstat.nii.gz")
         img_t.to_filename(fout_t)
         print("Wrote", fout_t)
 
     return {'betas': betas, 'tstats': tstats, 'terms': term_names}
+
+def make_safe(s):
+    # replace runs of non‐word characters with a single underscore
+    return re.sub(r"[^\w]+", "_", s).strip("_")
 
 # load vars
 subjects = pd.read_csv( "/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/3dDeconvolve_fdpt4/usable_subjs.csv" )['sub']
