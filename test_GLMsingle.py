@@ -85,22 +85,23 @@ def make_safe(s):
     return re.sub(r"[^\w]+", "_", s).strip("_")
 
 # load vars
-subjects = pd.read_csv( "/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/3dDeconvolve_fdpt4/usable_subjs.csv" )['sub']
+#subjects = pd.read_csv( "/Shared/lss_kahwang_hpc/data/ThalHi/3dDeconvolve_fdpt4/usable_subjs.csv" )['sub']
+subjects = input()
 n_runs = 8
 TR = 1.8
 stim_shift = 0.6  #(6s delay for thalhi per Dillan's code − 3*1.8s dropped = 0.6s)
 
-for sub in subjects:
+for sub in [subjects]:
     # define paths
-    deconv_dir = f"/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/3dDeconvolve_fdpt4/sub-{sub}"
-    data_dir   = f"/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/fmriprep/sub-{sub}/func"
+    deconv_dir = f"/Shared/lss_kahwang_hpc/data/ThalHi/3dDeconvolve_fdpt4/sub-{sub}"
+    data_dir   = f"/Shared/lss_kahwang_hpc/data/ThalHi/fmriprep/sub-{sub}/func"
     mask_afni  = os.path.join(deconv_dir, "combined_mask+tlrc")
     mask_nii   = os.path.join(deconv_dir, "combined_mask.nii.gz")
     stim_file  = os.path.join(deconv_dir, "cue_stimtimes.1D")
     onsets_mat = np.loadtxt(stim_file)
     
     # subject‐specific GLMsingle output
-    out_base = "/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/GLMsingle"
+    out_base = "/Shared/lss_kahwang_hpc/data/ThalHi/GLMsingle"
     outputdir = os.path.join(out_base, f"sub-{sub}")
     
     try:
@@ -108,7 +109,7 @@ for sub in subjects:
         os.makedirs(outputdir, exist_ok=True)
 
         # convert mask to NIfTI and fit masker once. This is because oroginal overlap mask is in AFNI format, and GLMsingle only accepts NIfTI.
-        subprocess.run( ["3dAFNItoNIFTI", "-prefix", mask_nii, mask_afni], check=True )
+        #subprocess.run( ["3dAFNItoNIFTI", "-prefix", mask_nii, mask_afni], check=True )
         masker = NiftiMasker(mask_img=mask_nii, standardize=False, detrend=False)
         masker.fit()
 
@@ -158,7 +159,7 @@ for sub in subjects:
 
         # 5) run voxelwise GLM on the single‐trial betas as validation
         Y = tb   # (n_trials, n_voxels)
-        behav = pd.read_csv("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/ThalHi_MRI_2020_RTs.csv")
+        behav = pd.read_csv("/Shared/lss_kahwang_hpc/data/ThalHi/ThalHi_MRI_2020_RTs.csv")
         subdf = behav[behav['sub']==sub].reset_index(drop=True)
         for c in ["Trial_type","Task"]:
             subdf[c] = subdf[c].astype("category")
