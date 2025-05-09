@@ -53,7 +53,9 @@ if __name__ == "__main__":
     ## relevant paths
     mask_dir = "/Shared/lss_kahwang_hpc/ROIs/"
     data_dr = "/Shared/lss_kahwang_hpc/data/ThalHi/3dDeconvolve_fdpt4/"
-    out_dir = "/Shared/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/"
+    GLMsingle_dir = "/Shared/lss_kahwang_hpc/data/ThalHi/GLMsingle/"
+    #out_dir = "/Shared/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/"
+    out_dir = "/Shared/lss_kahwang_hpc/data/ThalHi/GLMsingle/trialwiseRSA/"
     roi_fn = "whole_brain"
     sub_df = pd.read_csv(data_dr + "usable_subjs.csv")
 
@@ -68,7 +70,7 @@ if __name__ == "__main__":
     print("mask shape ", mask_data.shape)
     
     #num_trials = 408
-    num_subs = len(np.unique(sub_df['sub']))
+    #num_subs = len(np.unique(sub_df['sub'])) #not used..
 
     #sub_x_roi_x_coeff = np.zeros((num_subs, num_ROIs,num_trials,num_trials))
 
@@ -76,8 +78,10 @@ if __name__ == "__main__":
         
         #load LSS data
         print("\nloading LSS for subject ", s)
-        cur_lss_nii = nib.load( os.path.join(data_dr, ("sub-%s" %s),  ("cue_rtcov_IM.LSS.nii.gz")) ) #cue.3dT.LSS.nii.gz is the LSS without RT covariate
-        num_trials = int(cur_lss_nii.shape[3]/2)
+        #cur_lss_nii = nib.load( os.path.join(data_dr, ("sub-%s" %s),  ("cue_rtcov_IM.LSS.nii.gz")) ) #cue.3dT.LSS.nii.gz is the LSS without RT covariate # this is AFNI's version
+        cur_lss_nii = nib.load( os.path.join(GLMsingle_dir, ("sub-%s" %s),  ("%s_TrialBetas.nii.gz" %s)) ) # this is GLMsingle's version
+        #num_trials = int(cur_lss_nii.shape[3]/2)
+        num_trials = int(cur_lss_nii.shape[3]) # GLM single only has amplitude
 
         #load errts file
         print("\nloading errts for subjects ", s)
@@ -121,9 +125,13 @@ if __name__ == "__main__":
         # LSS data dim 4 set up like ...
         # [amplitude_trial_0, derivative_trial_0, amplitude_trial_1, derivative_trial_1, ...]
         cur_lss_data = cur_lss_nii.get_fdata()
-        lss_data_idx = np.array( [np.arange(0,num_trials*2,2), np.arange(1,num_trials*2,2)] ) #.flatten() # so that all amplitude values are in the 1st half and all derivative values are in the 2nd half of the file
-        cur_lss_data_amp = cur_lss_data[:, :, :, lss_data_idx[0]]
-        cur_lss_amp_nii=nilearn.image.new_img_like(cur_lss_nii, cur_lss_data_amp) # convert back to nii
+        
+        # don't need this for GLMsingle
+        #lss_data_idx = np.array( [np.arange(0,num_trials*2,2), np.arange(1,num_trials*2,2)] ) #.flatten() # so that all amplitude values are in the 1st half and all derivative values are in the 2nd half of the file
+        #cur_lss_data_amp = cur_lss_data[:, :, :, lss_data_idx[0]]
+        #cur_lss_amp_nii=nilearn.image.new_img_like(cur_lss_nii, cur_lss_data_amp) # convert back to nii
+
+        cur_lss_amp_nii=nilearn.image.new_img_like(cur_lss_nii, cur_lss_data) # convert back to nii
         print("lss shape ",cur_lss_amp_nii.shape)
         
         # -- mask LSS data to make it faster to loop through rois
