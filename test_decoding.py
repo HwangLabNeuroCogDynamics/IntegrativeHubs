@@ -17,8 +17,8 @@ import nilearn
 import datetime
 from nilearn.maskers import NiftiMasker
 
-#subject = input()
-subject='10001'
+subject = input()
+#subject='10001'
 func_path = "/Shared/lss_kahwang_hpc/data/ThalHi/GLMsingle/sub-%s/" %subject
 
 # figure out which version the subject did, DCFS or DSFC
