@@ -34,7 +34,6 @@ def new_apply_mask_and_get_affinity(
             target_affine=affine,
             target_shape=niimg.shape[:3],
             interpolation="nearest",
-            copy_header=True,
             force_resample=False,
         )
         mask, _ = masking.load_mask_img(mask_img)
