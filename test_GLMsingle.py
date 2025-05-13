@@ -106,7 +106,7 @@ for sub in [subjects]:
     
     try:
         # make sure output folder exists
-        os.makedirs(outputdir, exist_ok=True)
+        #os.makedirs(outputdir, exist_ok=True)
 
         # convert mask to NIfTI and fit masker once. This is because oroginal overlap mask is in AFNI format, and GLMsingle only accepts NIfTI.
         #subprocess.run( ["3dAFNItoNIFTI", "-prefix", mask_nii, mask_afni], check=True )
@@ -127,7 +127,8 @@ for sub in [subjects]:
             # build onsets vector for that run
             n_tp = ts.shape[1] # should be 213
             on = np.zeros(n_tp)
-            idx = np.round((onsets_mat[run] + stim_shift) / TR).astype(int) #round to nearest TR... see https://glmsingle.readthedocs.io/en/latest/wiki.html#my-experiment-design-is-not-quite-synchronized-with-my-fmri-data
+            tmp_mat = onsets_mat[run][~np.isnan(onsets_mat[run])]
+            idx = np.round(tmp_mat / TR).astype(int) #round to nearest TR... see https://glmsingle.readthedocs.io/en/latest/wiki.html#my-experiment-design-is-not-quite-synchronized-with-my-fmri-data
             on[idx] = 1
             design.append(on[:, np.newaxis])
 
@@ -158,12 +159,12 @@ for sub in [subjects]:
         masker.inverse_transform(tb).to_filename(os.path.join(outputdir, f"{sub}_TrialBetas.nii.gz"))
 
         # 5) run voxelwise GLM on the single‐trial betas as validation
-        Y = tb   # (n_trials, n_voxels)
-        behav = pd.read_csv("/Shared/lss_kahwang_hpc/data/ThalHi/ThalHi_MRI_2020_RTs.csv")
-        subdf = behav[behav['sub']==sub].reset_index(drop=True)
-        for c in ["Trial_type","Task"]:
-            subdf[c] = subdf[c].astype("category")
-        voxelwise_glm( Y, subdf, formula="y ~ C(Trial_type, Treatment(reference='Stay'))", masker=masker, out_dir=outputdir, prefix=str(sub), n_jobs=24 )
+        # Y = tb   # (n_trials, n_voxels)
+        # behav = pd.read_csv("/Shared/lss_kahwang_hpc/data/ThalHi/ThalHi_MRI_2020_RTs.csv")
+        # subdf = behav[behav['sub']==sub].reset_index(drop=True)
+        # for c in ["Trial_type","Task"]:
+        #     subdf[c] = subdf[c].astype("category")
+        # voxelwise_glm( Y, subdf, formula="y ~ C(Trial_type, Treatment(reference='Stay'))", masker=masker, out_dir=outputdir, prefix=str(sub), n_jobs=24 )
 
     except Exception as e:
         # write out a warning file if anything fails

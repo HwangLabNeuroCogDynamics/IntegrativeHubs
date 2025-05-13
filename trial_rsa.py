@@ -185,7 +185,7 @@ if __name__ == "__main__":
 
         #sub_x_roi_x_coeff[j,:,:,:] = roi_x_coeff
         #save output
-        np.save(out_dir+"coefs/%s_%s_rtcov_coef.npy" %(s, roi_fn), roi_x_coeff)
+        np.save(out_dir+"coefs/%s_%s_coef.npy" %(s, roi_fn), roi_x_coeff)
         
         ### the next step is regression onto RSA models...
 
