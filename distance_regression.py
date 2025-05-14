@@ -81,7 +81,7 @@ def ds_regression_roi_mixed(roi, data_dir, behav_df, subjects, model_syntax):
     all_df = all_df.reset_index(drop=True)
     # 3) fit a single mixed‐effects model (random intercept by subject)
     md = smf.mixedlm( model_syntax, all_df, groups=all_df["sub"])
-    mdf = md.fit(method="lbfgs")
+    mdf = md.fit(method="bfgs")
 
     # 4) extract the fixed‐effect estimates into a list of dicts
     results = []
@@ -143,9 +143,9 @@ def ds_regression_roi_mixed(roi, data_dir, behav_df, subjects, model_syntax):
 ########################
 
 #load behavioral data
-data_dir =  '/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/coefs/'
+data_dir = '/home/kahwang/argon/data/ThalHi/GLMsingle/trialwiseRSA/rdms_correlation_whitened_betas/'
 nii_dir = "/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/3dDeconvolve_fdpt4/"
-output_dir = "/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/RSA/trialwiseRSA/"
+output_dir = "/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/GLMsingle/trialwiseRSA/"
 
 #this is I gather that is from Xitong's fixes
 #df = pd.read_csv("/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/ThalHi_MRI_2020_RTs.csv") # this includes unusable subjects, totoal 74
@@ -169,7 +169,7 @@ behav_df = behav_df[behav_df['zRT'] <= 3]
 behav_df = behav_df[behav_df['prev_accuracy'] != 0]
 
 md = smf.mixedlm( "zRT ~ C(Trial_type, Treatment(reference='Stay')) * perceptual_change +  C(response_repeat) + C(task_repeat) * C(prev_target_feature_match , Treatment(reference='switch_target_feature'))", behav_df, groups=behav_df["sub"], re_formula="~1" )
-mdf = md.fit(method="lbfgs")
+mdf = md.fit(method="bfgs")
 print(mdf.summary())
 
 
@@ -180,7 +180,7 @@ print(mdf.summary())
 # first calculate trial by trial voxel distance, and save out the data, more efficient this way.
 def batch_compute_ds_npz(subjects, data_dir, n_roi=418):
     for s in subjects:
-        arr = np.load(os.path.join(data_dir, f"{s}_whole_brain_rtcov_coef.npy"))
+        arr = np.load(os.path.join(data_dir, f"{s}_Schaefer400_Morel_BG_rdm_corr_whitened.npy"))
         # arr.shape == (n_roi, n_trials, n_trials)
         n_trials = arr.shape[2]
 
@@ -189,19 +189,20 @@ def batch_compute_ds_npz(subjects, data_dir, n_roi=418):
 
         # build full ds array, pad t=0 with zeros
         ds = np.zeros((n_roi, n_trials), dtype=off1.dtype)
-        ds[:, 1:] = np.sqrt(2 * (1 - off1))
+        #tempo = 1-off1 
+        ds[:, 1:] = np.sqrt(2 * (1 - off1))  # if the coeff is Pearson correlation, this converts to distance
 
         fname = os.path.join(data_dir, f"{s}_ds.npz")
         np.savez_compressed(fname, ds=ds)
         print(f"✔ Subject {s}: saved ds shape {ds.shape} → {fname}")
 
-batch_compute_ds_npz(subjects, data_dir, data_dir)
+batch_compute_ds_npz(subjects, data_dir)
 
 df = pd.read_csv("/home/kahwang/bin/IntegrativeHubs/data/ThalHi_MRI_zRTs_full.csv")
 
 # now this is the model parallels the RT analysis
-model_syntax = "ds ~ C(Trial_type, Treatment(reference='Stay')) * perceptual_change +  C(response_repeat) + C(task_repeat) * C(prev_target_feature_match , Treatment(reference='switch_target_feature'))"
-results_list = Parallel(n_jobs=24)(delayed(ds_regression_roi_mixed)(roi, data_dir, df, subjects, model_syntax) for roi in np.arange(418))
+model_syntax = "ds ~ zRT * C(Trial_type, Treatment(reference='Stay')) + perceptual_change +  C(response_repeat) + C(task_repeat) * C(prev_target_feature_match , Treatment(reference='switch_target_feature'))"
+results_list = Parallel(n_jobs=32)(delayed(ds_regression_roi_mixed)(roi, data_dir, df, subjects, model_syntax) for roi in np.arange(418))
 results_list = [item for sublist in results_list for item in sublist]
 results_df = pd.DataFrame(results_list)
 
@@ -211,8 +212,8 @@ for reg in results_df['Regressor'].unique():
     tval = sub_df['T-value'].values
 
     reg_name = reg.replace(" ", "_").replace("(", "").replace(")", "").replace(":", "_").replace("/", "_")
-    write_stats_to_vol_yeo_template_nifti(coef, os.path.join(output_dir, f"{reg_name}_coefficient.nii.gz"))
-    write_stats_to_vol_yeo_template_nifti(tval, os.path.join(output_dir, f"{reg_name}_tvalue.nii.gz"))
+    write_stats_to_vol_yeo_template_nifti(coef, output_dir + "%s_coefficient.nii.gz" %reg_name)
+    write_stats_to_vol_yeo_template_nifti(tval,  output_dir + "%s_tstat.nii.gz" %reg_name)
 
 
 

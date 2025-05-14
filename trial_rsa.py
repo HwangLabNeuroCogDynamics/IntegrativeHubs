@@ -7,6 +7,7 @@ from datetime import datetime
 import scipy
 import nilearn
 from nilearn.maskers import NiftiLabelsMasker
+from scipy.spatial.distance import pdist, squareform
 
 
 ################################
@@ -85,7 +86,7 @@ if __name__ == "__main__":
 
         #load errts file
         print("\nloading errts for subjects ", s)
-        errts = nib.load(os.path.join(data_dr, ("sub-%s" %s), ("sub-%s_FIRmodel_errts_8cues2resp.nii.gz" %s)))
+        errts = nib.load(os.path.join(data_dr, ("sub-%s" %s), ("sub-%s_FIRmodel_task_switch_cue_switch_errts.nii.gz" %s)))
         print("errts shape ",errts.shape)
 
         # check for all zeros in errts
@@ -173,6 +174,7 @@ if __name__ == "__main__":
                 
                 # -- now calculate correlation coef
                 coeff_mat = np.corrcoef(voxels_x_trials_corrected, rowvar=False) # use pearson correlation
+                #coeff_mat = squareform(pdist(voxels_x_trials_corrected.T, metric='euclidean')) # euclidean distance
                 print("coeff matrix size: ", coeff_mat.shape)
                 #print("coeff matrix: ", coeff_mat[:5,40:45])
                 # ax = sns.heatmap(coeff_mat, linewidth=0.5, cmap="Greens", vmin=0, vmax=1)
