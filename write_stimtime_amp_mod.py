@@ -57,3 +57,15 @@ for sub in subjects:
         print(sub)
     ## do this to get rid of nans sed -i "s/nan//g" RT.1D
     # sed -i "s/nan//g" All_Trials.1D
+
+
+# write out RTs as regressors
+for sub in subjects:
+    try:
+        sub_Df = df.loc[(df['sub'] == sub)]
+        sub_Df = sub_Df.sort_values(by =['block', 'trial_n'])
+        rt = sub_Df['RT_z'].to_numpy()
+        rt[np.isnan(rt)] = np.nanmean(rt)
+        np.savetxt("/Shared/lss_kahwang_hpc/data/ThalHi/GLMsingle/sub-{}/RT.1D". format(sub), rt, fmt='%1.4f')
+    except:
+        print(sub)
