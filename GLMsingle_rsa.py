@@ -140,7 +140,7 @@ if __name__ == "__main__":
 
         # Load GLMsingle trial betas
         print(f"\nLoading GLMsingle TrialBetas for subject {s}")
-        trial_betas_nii_path = os.path.join(GLMsingle_dir, f"sub-{s}", f"{s}_TrialBetas.nii.gz")
+        trial_betas_nii_path = os.path.join(GLMsingle_dir, f"sub-{s}", f"{s}_TrialBetas_resRT.nii.gz")
         if not os.path.exists(trial_betas_nii_path):
             print(f"TrialBetas file not found for subject {s} at {trial_betas_nii_path}. Skipping.")
             continue
@@ -298,8 +298,8 @@ if __name__ == "__main__":
 
         # Save RDMs for the current subject
         if num_ROIs > 0 : # Only save if there was at least one ROI processed
-            np.save(os.path.join(out_dir, "rdms_correlation_whitened_betas", f"{s}_{roi_fn_out_suffix}_rdm_corr_whitened.npy"), rdm_corr_whitened)
-            np.save(os.path.join(out_dir, "rdms_euclidean_whitened_betas", f"{s}_{roi_fn_out_suffix}_rdm_euc_whitened.npy"), rdm_euc_whitened)
+            np.save(os.path.join(out_dir, "rdms_correlation_whitened_betas", f"{s}_{roi_fn_out_suffix}_rdm_corr_whitened_resRT.npy"), rdm_corr_whitened)
+            np.save(os.path.join(out_dir, "rdms_euclidean_whitened_betas", f"{s}_{roi_fn_out_suffix}_rdm_euc_whitened_resRT.npy"), rdm_euc_whitened)
             #np.save(os.path.join(out_dir, "rdms_mahalanobis_betas", f"{s}_{roi_fn_out_suffix}_rdm_mahalanobis.npy"), rdm_mahalanobis)
             print(f"RDMs saved for subject {s}")
 

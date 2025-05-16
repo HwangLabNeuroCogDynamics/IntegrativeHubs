@@ -14,9 +14,7 @@ from nilearn.maskers.nifti_spheres_masker import _apply_mask_and_get_affinity
 import datetime
 
 
-def new_apply_mask_and_get_affinity(
-    seeds, niimg, radius, allow_overlap, mask_img=None
-):
+def new_apply_mask_and_get_affinity( seeds, niimg, radius, allow_overlap, mask_img=None ):
     seeds = np.asarray(seeds)
     if seeds.ndim == 1:
         seeds = seeds[np.newaxis, :]
@@ -122,16 +120,69 @@ process_mask_coords = coord_transform(
 )
 process_mask_coords = np.asarray(process_mask_coords).T
 
-now = datetime.datetime.now()
-print(now)
-X_old, A_old = _apply_mask_and_get_affinity( process_mask_coords, mask_img, 6, True, mask_img=mask_img)
-now = datetime.datetime.now()
-print(now)
+# now = datetime.datetime.now()
+# print(now)
+# X_old, A_old = _apply_mask_and_get_affinity( process_mask_coords, mask_img, 6, True, mask_img=mask_img)
+# now = datetime.datetime.now()
+# print(now)
 
 
 # now try the new function
 now = datetime.datetime.now()
 print(now)
 X_new, A_new = new_apply_mask_and_get_affinity( process_mask_coords, mask_img, 6, True, mask_img=mask_img)
+now = datetime.datetime.now()
+print(now)
+
+
+def simple_apply_mask_and_get_affinity(seeds, niimg, radius, allow_overlap, mask_img=None):
+    # Construct searchlight spheres (affinity matrix) around seed points, adapted from Nilearn
+    # Input parameters:
+    #   seeds       : array-like of shape (n_seeds, 3), world-space (x,y,z) coordinates in mm
+    #   niimg       : 4D Nifti image or filename of the functional data (for shape reference) 
+    #                 (not actually used here, but kept for compatibility)
+    #   radius      : float, sphere radius in mm around each seed
+    #   allow_overlap: bool, if False, raises an error when spheres overlap
+    #   mask_img    : 3D Nifti image or filename of a **binary** mask (non-zero voxels define searchlight domain)
+    #
+    # Returns:
+    #   X           : None placeholder (to match API), can be ignored
+    #   A_sparse    : scipy.sparse CSR matrix, shape (n_seeds, n_voxels_in_mask), 
+    #                 A_sparse[i, j] == True if voxel j is in sphere i
+    # Binarized mask_img assumed
+    mask, affine = masking.load_mask_img(mask_img)
+    mask_coords = np.column_stack(np.where(mask != 0))
+    mask_coords_world = np.column_stack(
+        coord_transform(mask_coords[:,0],
+                        mask_coords[:,1],
+                        mask_coords[:,2],
+                        affine)
+    )
+    tree = KDTree(mask_coords_world)
+    neighbors_list = tree.query_radius(seeds, r=radius)
+
+    n_seeds = len(seeds)
+    n_vox   = mask_coords.shape[0]
+    A_sparse = sparse.lil_matrix((n_seeds, n_vox), dtype=bool)
+
+    inv_affine = np.linalg.inv(affine)
+    seeds_vox = (
+        np.column_stack([seeds, np.ones(n_seeds)]) @ inv_affine.T
+    )[:,:3].round().astype(int)
+    coord2idx = {tuple(c): i for i, c in enumerate(mask_coords)}
+
+    for i, neigh in enumerate(neighbors_list):
+        A_sparse.rows[i] = list(neigh)
+        sv = tuple(seeds_vox[i])
+        if sv in coord2idx:
+            A_sparse.rows[i].append(coord2idx[sv])
+        if not allow_overlap and len(A_sparse.rows[i]) != len(set(A_sparse.rows[i])):
+            raise ValueError(f"Overlap detected in sphere {i}")
+
+    return None, A_sparse.tocsr()
+
+now = datetime.datetime.now()
+print(now)
+_, A_sim = simple_apply_mask_and_get_affinity( process_mask_coords, mask_img, 6, True, mask_img=mask_img)
 now = datetime.datetime.now()
 print(now)
