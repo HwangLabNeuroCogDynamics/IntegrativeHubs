@@ -1,11 +1,30 @@
 # do distance regression for each subject, fit model for each searchlight sphere
 import os
+### this is necessary when using joblib to avoid parallelization issues
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
 import numpy as np
 import pandas as pd
 import nibabel as nib
 from joblib import Parallel, delayed
 import statsmodels.formula.api as smf
 from nilearn.masking import unmask
+import re
+
+import re
+
+def clean_regressor_name(reg_name):
+    # Replace complex formula labels with simplified ones
+    clean = reg_name
+    clean = re.sub(r"C\(([^,]+),\s*Treatment\(reference=['\"]?([^'\"]+)['\"]?\)\)\[T\.([^\]]+)\]", r"\1_vs_\3", clean)
+    clean = re.sub(r"C\(([^)]+)\)\[T\.([^\]]+)\]", r"\1_vs_\2", clean)
+    clean = re.sub(r"[^\w]+", "_", clean)  # Replace anything non-alphanumeric with underscore
+    clean = re.sub(r"_+", "_", clean)      # Collapse multiple underscores
+    clean = clean.strip("_")               # Remove leading/trailing underscores
+    return clean
 
 
 # ------------------------ Config ------------------------
@@ -22,13 +41,13 @@ behavior_csv = "/Shared/lss_kahwang_hpc/data/ThalHi/ThalHi_MRI_zRTs_full.csv"
 df = pd.read_csv(behavior_csv)
 
 model_syntax = (
-    "ds ~ zRT*C(Trial_type, Treatment(reference='Stay')) + perceptual_change + "
+    "ds ~ zRT + C(Trial_type, Treatment(reference='IDS')) + perceptual_change + "
     "C(response_repeat) + C(task_repeat) + "
     "C(prev_target_feature_match , Treatment(reference='switch_target_feature'))"
 )
 
 # ------------------------ Spherewise Regression ------------------------
-def regress_one_sphere(sphere_index, sdf, ds_array):
+def regress_one_sphere(sphere_index, sdf, ds_array, model_syntax):
     sdf = sdf.copy()
     sdf["ds"] = ds_array[sphere_index, :]
     beta = {}
@@ -40,24 +59,24 @@ def regress_one_sphere(sphere_index, sdf, ds_array):
         beta = model.params.to_dict()
         tval = model.tvalues.to_dict()
 
-        # === EDS vs IDS contrast ===
-        fe_names = model.params.index.tolist()
-        fe_vals  = model.params.values
-        k_fe     = len(fe_names)
+        # === EDS vs IDS contrast === #not needed by setting IDS as reference
+        # fe_names = model.params.index.tolist()
+        # fe_vals  = model.params.values
+        # k_fe     = len(fe_names)
 
-        try:
-            pos_eds = fe_names.index("C(Trial_type, Treatment(reference='Stay'))[T.EDS]")
-            pos_ids = fe_names.index("C(Trial_type, Treatment(reference='Stay'))[T.IDS]")
-        except ValueError:
-            pass  # one or both regressors not present
-        else:
-            L = np.zeros((1, k_fe))
-            L[0, pos_eds] = 1
-            L[0, pos_ids] = -1
-            ct = model.t_test(L)
+        # try:
+        #     pos_eds = fe_names.index("C(Trial_type, Treatment(reference='Stay'))[T.EDS]")
+        #     pos_ids = fe_names.index("C(Trial_type, Treatment(reference='Stay'))[T.IDS]")
+        # except ValueError:
+        #     pass  # one or both regressors not present
+        # else:
+        #     L = np.zeros((1, k_fe))
+        #     L[0, pos_eds] = 1
+        #     L[0, pos_ids] = -1
+        #     ct = model.t_test(L)
 
-            beta["EDS_vs_IDS"] = fe_vals[pos_eds] - fe_vals[pos_ids]
-            tval["EDS_vs_IDS"] = np.squeeze(ct.tvalue)
+        #     beta["EDS_vs_IDS"] = fe_vals[pos_eds] - fe_vals[pos_ids]
+        #     tval["EDS_vs_IDS"] = np.squeeze(ct.tvalue)
 
     except Exception as e:
         # leave beta and tval as empty dicts (will fill with NaNs later)
@@ -66,9 +85,9 @@ def regress_one_sphere(sphere_index, sdf, ds_array):
     return beta, tval
 
 # ------------------------ Process One Subject ------------------------
-def process_subject(sub_id):
+def process_subject(sub_id, fn, model_syntax, model_tag):
     print(f"→ Processing subject {sub_id}")
-    subj_file = os.path.join(data_dir, f"{sub_id}_sl_adjcorr.npy")
+    subj_file = os.path.join(data_dir, "%s_sl_adjcorr_%s.npy" %(sub_id, fn))
     if not os.path.exists(subj_file):
         print(f"✗ Missing data for {sub_id}")
         return
@@ -90,7 +109,7 @@ def process_subject(sub_id):
     ds_array = ds_array[:, trial_vec] #drop trials in the ds array
 
     # Regression per sphere
-    results = Parallel(n_jobs=16, verbose = 5)(delayed(regress_one_sphere)(i, sdf, ds_array) for i in range(n_spheres))
+    results = Parallel(n_jobs=24, verbose = 5)(delayed(regress_one_sphere)(i, sdf, ds_array, model_syntax) for i in range(n_spheres))
 
     # Collect regressor names
     reg_names = sorted(set(k for beta, _ in results for k in beta.keys()))
@@ -103,16 +122,19 @@ def process_subject(sub_id):
             betas[r][i] = beta.get(r, np.nan)
             tvals[r][i] = tval.get(r, np.nan)
 
+    # Create subject-specific output directory
+    subj_out_dir = os.path.join(out_dir, sub_id)
+    os.makedirs(subj_out_dir, exist_ok=True)
+
     # Save to nii using masking.unmask
     for r in reg_names:
-        r_clean = r.replace(" ", "_").replace("(", "").replace(")", "").replace(":", "_").replace("/", "_")
+        r_clean = clean_regressor_name(r)
         beta_img = unmask(betas[r], mask_nii)
         tval_img = unmask(tvals[r], mask_nii)
+        beta_img.to_filename(os.path.join(subj_out_dir, f"{r_clean}_{model_tag}_{fn}_beta.nii.gz"))
+        tval_img.to_filename(os.path.join(subj_out_dir, f"{r_clean}_{model_tag}_{fn}_tval.nii.gz"))
 
-        beta_img.to_filename(os.path.join(out_dir, f"{sub_id}_{r_clean}_beta.nii.gz"))
-        tval_img.to_filename(os.path.join(out_dir, f"{sub_id}_{r_clean}_tval.nii.gz"))
-
-    print(f"✓ Finished subject {sub_id}")
+    print(f"✓ Finished subject {sub_id} for {model_tag}")
 
 # ------------------------ Run All Subjects ------------------------
 if __name__ == "__main__":
@@ -121,4 +143,25 @@ if __name__ == "__main__":
     subjects = input()
 
     for sub in [subjects]:
-        process_subject(sub)
+            # Define model(s)
+        model1 = (
+            "ds ~ zRT + C(Trial_type, Treatment(reference='IDS')) + perceptual_change + "
+            "C(response_repeat) + C(task_repeat) + "
+            "C(prev_target_feature_match , Treatment(reference='switch_target_feature'))"
+        )
+        process_subject(sub, fn = "resRTWT", model_syntax=model1, model_tag="RTModel")
+        process_subject(sub, fn = "WT", model_syntax=model1, model_tag="RTModel")
+        process_subject(sub, fn = "resRTWF", model_syntax=model1, model_tag="RTModel")
+        process_subject(sub, fn = "WF", model_syntax=model1, model_tag="RTModel")
+        
+        model2 = (
+            "ds ~  C(Trial_type, Treatment(reference='IDS')) + perceptual_change + "
+            "C(response_repeat) + C(task_repeat) + "
+            "C(prev_target_feature_match , Treatment(reference='switch_target_feature'))"
+        )
+        process_subject(sub, fn = "resRTWT", model_syntax=model2, model_tag="noRTModel")
+        process_subject(sub, fn = "WT", model_syntax=model2, model_tag="noRTModel")
+        process_subject(sub, fn = "resRTWF", model_syntax=model2, model_tag="noRTModel")
+        process_subject(sub, fn = "WF", model_syntax=model2, model_tag="noRTModel")        
+        
+        #process_subject(sub)
