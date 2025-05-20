@@ -1,8 +1,10 @@
-"""
-Fast searchlight adjacency RSA script using a custom _apply_mask_and_get_affinity.
-Computes Euclidean and correlation distances between adjacent trials within each sphere.
-"""
 import os
+### this is necessary when using joblib to avoid parallelization issues
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
 import warnings
 import numpy as np
 import nibabel as nib
@@ -12,13 +14,15 @@ from scipy.linalg import eigh
 from scipy.spatial.distance import pdist, squareform
 from sklearn import neighbors
 from nilearn import image, masking
-from nilearn._utils.niimg_conversions import (
-    check_niimg_3d,
-    safe_get_data,
-)
+from nilearn._utils.niimg_conversions import ( check_niimg_3d, safe_get_data, )
 from nilearn.image.resampling import coord_transform
 from joblib import Parallel, delayed
 import nilearn
+import pandas as pd
+
+#Fast searchlight adjacency RSA script using a custom _apply_mask_and_get_affinity.
+#Computes Euclidean and correlation distances between adjacent trials within each sphere.
+
 
 # ------------------------------------------------------------------------
 # Fast affinity function adapted from nilearn
@@ -208,17 +212,22 @@ def compute_shrunk_covariance_and_whitening_matrix(x, return_shrunk_cov=False):
 # ------------------------------------------------------------------------
 # Process one sphere, and get distances bewteen adjacent trials
 # ------------------------------------------------------------------------
-def process_sphere(idx, tb_VxT, devs, A, n_trials):
+def process_sphere(idx, tb_VxT, devs, A, n_trials, whiten="On"):
     vox_inds = A[idx].indices # get the indices of the voxels in this sphere
     if len(vox_inds) == 0:
         return np.full(n_trials, np.nan), np.full(n_trials, np.nan)
-    dev_roi = devs[:, vox_inds] # get the deviation patterns for this sphere for noise cov
-    if dev_roi.shape[0] >= 2:
-        W, _ = compute_shrunk_covariance_and_whitening_matrix(dev_roi, return_shrunk_cov=True) 
-    else:
-        W = np.eye(len(vox_inds))
     b_roi = tb_VxT[vox_inds, :] # get the betas for this sphere
-    wb = W.dot(b_roi) # whitened betas
+    dev_roi = devs[:, vox_inds] # get the deviation patterns for this sphere for noise cov
+    
+    if whiten == "On":
+        if dev_roi.shape[0] >= 2:
+            W, _ = compute_shrunk_covariance_and_whitening_matrix(dev_roi, return_shrunk_cov=True) 
+        else:
+            W = np.eye(len(vox_inds))
+        wb = W.dot(b_roi) # whitened betas    
+    else:
+        wb = b_roi
+        
     data_tv = wb.T # transpose to get trials as rows
     #euc = np.full(n_trials, np.nan)
     corrd = np.full(n_trials, np.nan)
@@ -227,13 +236,12 @@ def process_sphere(idx, tb_VxT, devs, A, n_trials):
     for t in range(1, n_trials):
         r = np.corrcoef(data_tv[t-1], data_tv[t])[0,1]
         corrd[t] = np.sqrt(2 * (1 - r)) # convert to distance 
-    return corrd, _ #euc # not doing euc for now
+    return corrd, np.full(n_trials, np.nan) #euc # not doing euc for now
 
 # ------------------------------------------------------------------------
 # Main searchlight adjacency RSA pipeline
 # ------------------------------------------------------------------------
-def main():
-    subs = input()
+def run_func(subs, in_fn, out_fn, mnn):
     mask_dir = "/Shared/lss_kahwang_hpc/ROIs"
     GLM_dir = "/Shared/lss_kahwang_hpc/data/ThalHi/GLMsingle"
     out_dir = "/Shared/lss_kahwang_hpc/data/ThalHi/GLMsingle/searchlightRSA"
@@ -246,43 +254,51 @@ def main():
     binary_mask_img = nilearn.image.new_img_like(mask_nii, binary)
     ijk = np.column_stack(np.where(binary == 1))
     seeds = np.column_stack( coord_transform(ijk[:,0], ijk[:,1], ijk[:,2], mask_nii.affine) )
-    radius = 9.5
+    radius = 6
     allow_overlap = True
-    n_jobs = 112
+    n_jobs = 24
     for s in [subs]:
         print(f"\n=== Subject {s} ===")
         subj = os.path.join(GLM_dir, f"sub-{s}")
-        tb_file = os.path.join(subj, f"{s}_TrialBetas_resRT.nii.gz")
+        tb_file = os.path.join(subj, "%s_%s.nii.gz" %(s, in_fn))
         if not os.path.exists(tb_file):
             print("Missing TrialBetas:", tb_file); continue
         tb_nii = nib.load(tb_file)
         n_trials = tb_nii.shape[3]
         tb_mat = masking.apply_mask(tb_nii, binary_mask_img)
         tb_VxT = tb_mat.T # voxels x trials
+        del tb_mat
         mean_beta = tb_VxT.mean(axis=1, keepdims=True)
         devs = (tb_VxT - mean_beta).T # get deviations for noise covariance
-        X, A = new_apply_mask_and_get_affinity(
-            seeds=seeds,
-            niimg=tb_nii,
-            radius=radius,
-            allow_overlap=allow_overlap,
-            mask_img=binary_mask_img
-        )
+        X, A = new_apply_mask_and_get_affinity( seeds=seeds, niimg=tb_nii, radius=radius, allow_overlap=allow_overlap, mask_img=binary_mask_img )
         n_seeds = A.shape[0]
         print(f"  # spheres: {n_seeds}")
         results = Parallel(n_jobs=n_jobs, verbose=2)(
-            delayed(process_sphere)(i, tb_VxT, devs, A, n_trials)
+            delayed(process_sphere)(i, tb_VxT, devs, A, n_trials, whiten=mnn)
             for i in range(n_seeds)
         )
         corr_adj = np.vstack([c for c,_ in results])
         #euc_adj = np.vstack([e for _,e in results])
-        np.save(os.path.join(out_dir, f"{s}_sl_adjcorr.npy"), corr_adj)
+        if mnn == "On":
+            mnn_fn = "T"
+        elif mnn == "Off":
+            mnn_fn = "F"
+        else:
+            mnn_fn = "F"
+        np.save(os.path.join(out_dir, "%s_sl_adjcorr_%s%s.npy" %(s, out_fn, mnn_fn)), corr_adj)
         #np.save(os.path.join(out_dir, f"{s}_sl_adjeuc.npy"),  euc_adj)
         print(f"Saved shapes: corr {corr_adj.shape}")
 
 if __name__ == "__main__":
+    
+    subs = input()
+    #subjects = pd.read_csv("/Shared/lss_kahwang_hpc/data/ThalHi/3dDeconvolve_fdpt4/usable_subjs.csv")['sub']
+    #for subs in subjects:
     start = datetime.now()
-    print("Start:", start)
-    main()
+    print("Subjectart:", start)
+    run_func(subs, in_fn = "TrialBetas", out_fn = "resRTW", mnn="On")
+    run_func(subs, in_fn = "TrialBetas_resRT", out_fn = "W", mnn="On")
+    run_func(subs, in_fn = "TrialBetas", out_fn = "resRTW", mnn="Off")
+    run_func(subs, in_fn = "TrialBetas_resRT", out_fn = "W", mnn="Off")
     print("End:", datetime.now(), "Duration:", datetime.now() - start)
 
