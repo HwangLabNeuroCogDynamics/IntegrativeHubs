@@ -14,8 +14,6 @@ import statsmodels.formula.api as smf
 from nilearn.masking import unmask
 import re
 
-import re
-
 def clean_regressor_name(reg_name):
     # Replace complex formula labels with simplified ones
     clean = reg_name
@@ -25,7 +23,6 @@ def clean_regressor_name(reg_name):
     clean = re.sub(r"_+", "_", clean)      # Collapse multiple underscores
     clean = clean.strip("_")               # Remove leading/trailing underscores
     return clean
-
 
 # ------------------------ Config ------------------------
 data_dir = "/Shared/lss_kahwang_hpc/data/ThalHi/GLMsingle/searchlightRSA"
@@ -40,11 +37,11 @@ sphere_inds = np.where(mask_data > 0)
 behavior_csv = "/Shared/lss_kahwang_hpc/data/ThalHi/ThalHi_MRI_zRTs_full.csv"
 df = pd.read_csv(behavior_csv)
 
-model_syntax = (
-    "ds ~ zRT + C(Trial_type, Treatment(reference='IDS')) + perceptual_change + "
-    "C(response_repeat) + C(task_repeat) + "
-    "C(prev_target_feature_match , Treatment(reference='switch_target_feature'))"
-)
+# model_syntax = (
+#     "ds ~ zRT + C(Trial_type, Treatment(reference='IDS')) + perceptual_change + "
+#     "C(response_repeat) + C(task_repeat) + "
+#     "C(prev_target_feature_match , Treatment(reference='switch_target_feature'))"
+# )
 
 # ------------------------ Spherewise Regression ------------------------
 def regress_one_sphere(sphere_index, sdf, ds_array, model_syntax):
@@ -105,11 +102,12 @@ def process_subject(sub_id, fn, model_syntax, model_tag):
               (sdf['trial_Corr'] != 0) &
               (sdf['zRT'] <= 3) &
               (sdf['prev_accuracy'] != 0)].reset_index(drop=True)
+    sdf['perceptual_change_c'] = sdf['perceptual_change'] - sdf['perceptual_change'].mean() #center regresor
     trial_vec = (sdf['block'] - 1) * 51 + sdf['trial_n'] #figure out the trial idx after dropping trials
     ds_array = ds_array[:, trial_vec] #drop trials in the ds array
 
     # Regression per sphere
-    results = Parallel(n_jobs=24, verbose = 5)(delayed(regress_one_sphere)(i, sdf, ds_array, model_syntax) for i in range(n_spheres))
+    results = Parallel(n_jobs=16, verbose = 5)(delayed(regress_one_sphere)(i, sdf, ds_array, model_syntax) for i in range(n_spheres))
 
     # Collect regressor names
     reg_names = sorted(set(k for beta, _ in results for k in beta.keys()))
@@ -145,23 +143,23 @@ if __name__ == "__main__":
     for sub in [subjects]:
             # Define model(s)
         model1 = (
-            "ds ~ zRT + C(Trial_type, Treatment(reference='IDS')) + perceptual_change + "
+            "ds ~ zRT + C(Trial_type, Treatment(reference='IDS')) * perceptual_change_c + "
             "C(response_repeat) + C(task_repeat) + "
             "C(prev_target_feature_match , Treatment(reference='switch_target_feature'))"
         )
-        process_subject(sub, fn = "resRTWT", model_syntax=model1, model_tag="RTModel")
         process_subject(sub, fn = "WT", model_syntax=model1, model_tag="RTModel")
-        process_subject(sub, fn = "resRTWF", model_syntax=model1, model_tag="RTModel")
+        process_subject(sub, fn = "resRTWT", model_syntax=model1, model_tag="RTModel")
         process_subject(sub, fn = "WF", model_syntax=model1, model_tag="RTModel")
+        process_subject(sub, fn = "resRTWF", model_syntax=model1, model_tag="RTModel")
         
         model2 = (
-            "ds ~  C(Trial_type, Treatment(reference='IDS')) + perceptual_change + "
+            "ds ~  C(Trial_type, Treatment(reference='IDS')) * perceptual_change_c + "
             "C(response_repeat) + C(task_repeat) + "
             "C(prev_target_feature_match , Treatment(reference='switch_target_feature'))"
         )
-        process_subject(sub, fn = "resRTWT", model_syntax=model2, model_tag="noRTModel")
         process_subject(sub, fn = "WT", model_syntax=model2, model_tag="noRTModel")
-        process_subject(sub, fn = "resRTWF", model_syntax=model2, model_tag="noRTModel")
-        process_subject(sub, fn = "WF", model_syntax=model2, model_tag="noRTModel")        
+        process_subject(sub, fn = "resRTWT", model_syntax=model2, model_tag="noRTModel")
+        process_subject(sub, fn = "WF", model_syntax=model2, model_tag="noRTModel")
+        process_subject(sub, fn = "resRTWF", model_syntax=model2, model_tag="noRTModel")        
         
         #process_subject(sub)

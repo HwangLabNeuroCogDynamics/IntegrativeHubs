@@ -254,9 +254,9 @@ def run_func(subs, in_fn, out_fn, mnn):
     binary_mask_img = nilearn.image.new_img_like(mask_nii, binary)
     ijk = np.column_stack(np.where(binary == 1))
     seeds = np.column_stack( coord_transform(ijk[:,0], ijk[:,1], ijk[:,2], mask_nii.affine) )
-    radius = 6
+    radius = 8
     allow_overlap = True
-    n_jobs = 24
+    n_jobs = 16
     for s in [subs]:
         print(f"\n=== Subject {s} ===")
         subj = os.path.join(GLM_dir, f"sub-{s}")
@@ -296,9 +296,9 @@ if __name__ == "__main__":
     #for subs in subjects:
     start = datetime.now()
     print("Subjectart:", start)
-    run_func(subs, in_fn = "TrialBetas", out_fn = "resRTW", mnn="On")
-    run_func(subs, in_fn = "TrialBetas_resRT", out_fn = "W", mnn="On")
-    run_func(subs, in_fn = "TrialBetas", out_fn = "resRTW", mnn="Off")
-    run_func(subs, in_fn = "TrialBetas_resRT", out_fn = "W", mnn="Off")
+    run_func(subs, in_fn = "TrialBetas", out_fn = "WT", mnn="On")
+    run_func(subs, in_fn = "TrialBetas_resRT", out_fn = "resRTWT", mnn="On")
+    run_func(subs, in_fn = "TrialBetas", out_fn = "WF", mnn="Off")
+    run_func(subs, in_fn = "TrialBetas_resRT", out_fn = "resRTWF", mnn="Off")
     print("End:", datetime.now(), "Duration:", datetime.now() - start)
 
