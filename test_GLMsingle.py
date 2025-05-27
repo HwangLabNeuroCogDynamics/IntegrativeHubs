@@ -1,6 +1,12 @@
 #testing GLMSingle
-# to install, on thalamege, do pip install git+https://github.com/cvnlab/GLMsingle.git
+# to install, on thalamege, do pip install --user git+https://github.com/cvnlab/GLMsingle.git
 # to install on argon, first "source activate" into your env, then do "pip install git+https://github.com/cvnlab/GLMsingle.git"
+
+# read this paper: https://elifesciences.org/articles/77599
+# watch this video: https://www.youtube.com/watch?v=xFO-cYHZEwg
+# here take a look at their online documentation: https://glmsingle.readthedocs.io/en/latest/python.html
+
+
 import numpy as np
 import os
 from os.path import join, exists, split
@@ -86,7 +92,7 @@ def make_safe(s):
 
 # load vars
 #subjects = pd.read_csv( "/Shared/lss_kahwang_hpc/data/ThalHi/3dDeconvolve_fdpt4/usable_subjs.csv" )['sub']
-subjects = input()
+subjects = input() #you can hard code the subject ID here when testing..
 n_runs = 8
 TR = 1.8
 stim_shift = 0.6  #(6s delay for thalhi per Dillan's code − 3*1.8s dropped = 0.6s)
@@ -127,7 +133,7 @@ for sub in [subjects]:
             # build onsets vector for that run
             n_tp = ts.shape[1] # should be 213
             on = np.zeros(n_tp)
-            tmp_mat = onsets_mat[run][~np.isnan(onsets_mat[run])]
+            tmp_mat = onsets_mat[run][~np.isnan(onsets_mat[run])] # check their online doc to see the format
             idx = np.round(tmp_mat / TR).astype(int) #round to nearest TR... see https://glmsingle.readthedocs.io/en/latest/wiki.html#my-experiment-design-is-not-quite-synchronized-with-my-fmri-data
             on[idx] = 1
             design.append(on[:, np.newaxis])
@@ -158,7 +164,7 @@ for sub in [subjects]:
         tb = np.squeeze(typed['betasmd']).T
         masker.inverse_transform(tb).to_filename(os.path.join(outputdir, f"{sub}_TrialBetas.nii.gz"))
 
-        # 5) run voxelwise GLM on the single‐trial betas as validation
+        # 5) run voxelwise GLM on the single‐trial betas as validation. 
         # Y = tb   # (n_trials, n_voxels)
         # behav = pd.read_csv("/Shared/lss_kahwang_hpc/data/ThalHi/ThalHi_MRI_2020_RTs.csv")
         # subdf = behav[behav['sub']==sub].reset_index(drop=True)

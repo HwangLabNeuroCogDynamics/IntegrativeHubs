@@ -15,25 +15,10 @@ from nilearn.masking import unmask
 import re
 
 def clean_regressor_name(reg_name):
-    # 1) Explicit mappings for your key terms
-    mappings = {
-        r"C\(Trial_type,\s*Treatment\(reference=['\"]?IDS['\"]?\)\)\[T\.EDS\]": "EDS_v_IDS",
-        r"C\(Trial_type,\s*Treatment\(reference=['\"]?IDS['\"]?\)\)\[T\.Stay\]": "IDS_v_Stay",
-        r"C\(response_repeat\)\[T\.True\]:C\(task_repeat\)\[T\.True\]": "response_repeat_x_task_repeat",
-        r"C\(task_repeat\)\[T\.True\]:C\(prev_target_feature_match,\s*Treatment\(reference=['\"]?switch_target_feature['\"]?\)\)\[T\.same_target_feature\]":
-            "task_repeat_x_prev_target_feature",
-    }
-
-    for pattern, replacement in mappings.items():
-        if re.search(pattern, reg_name):
-            # Once one matches, return immediately
-            return replacement
-
-    # 2) Fallback generic cleaning
     clean = reg_name
     # simplify any remaining C(...) contrasts
     clean = re.sub(r"C\(([^,]+),\s*Treatment\(reference=['\"]?([^'\"]+)['\"]?\)\)\[T\.([^\]]+)\]", r"\1_vs_\3", clean)
-    clean = re.sub(r"C\(([^)]+)\)\[T\.([^\]]+)\]",                           r"\1_vs_\2", clean)
+    clean = re.sub(r"C\(([^)]+)\)\[T\.([^\]]+)\]", r"\1_vs_\2", clean)
     # replace non-alphanumeric with underscore
     clean = re.sub(r"[^\w]+", "_", clean)
     # collapse multiple underscores
@@ -94,7 +79,7 @@ def regress_one_sphere(sphere_index, sdf, ds_array, model_syntax):
         freq_prev = sdf['prev_target_feature_match'].value_counts(normalize=True)
         p_prev    = float(freq_prev.get('same_target_feature', 0))
 
-        # perceptual_change_c and its Trial_type interactions
+        # variable names...
         name_pc      = "perceptual_change_c"
         name_eds_pc  = "C(Trial_type, Treatment(reference='IDS'))[T.EDS]:perceptual_change_c"
         name_stay_pc = "C(Trial_type, Treatment(reference='IDS'))[T.Stay]:perceptual_change_c"
@@ -103,6 +88,8 @@ def regress_one_sphere(sphere_index, sdf, ds_array, model_syntax):
         name_tr     = "C(task_repeat)[T.True]"
         name_prev   = [n for n in params.index if "prev_target_feature_match" in n and "]" in n][0]
         name_trprev = f"{name_tr}:{name_prev}"
+        name_eds_main  = "C(Trial_type, Treatment(reference='IDS'))[T.EDS]"
+        name_stay_main = "C(Trial_type, Treatment(reference='IDS'))[T.Stay]"
 
         # add maringal effect and tstat via linear contrast 
         def add_mfx(key, L):
@@ -169,6 +156,30 @@ def regress_one_sphere(sphere_index, sdf, ds_array, model_syntax):
             for n in params.index
         ]
         add_mfx('main_effect_prev_target_feature_match', L_prev)
+
+        #Main effect: EDS vs IDS
+        L_eds_main = [
+            1 if n == name_eds_main else
+            0
+            for n in params.index
+        ]
+        add_mfx('main_effect_EDS_v_IDS', L_eds_main)
+
+        #IDS vs Stay
+        L_stay_main = [
+            1 if n == name_stay_main else
+            0
+            for n in params.index
+        ]
+        add_mfx('main_effect_IDS_v_Stay', L_stay_main)
+
+        # response_repeat × task_repeat
+        L_rrtr_int = [
+            1 if n == name_rrtr else
+            0
+            for n in params.index
+        ]
+        add_mfx('response_repeat_x_task_repeat', L_rrtr_int)
 
     except Exception:
         # If fitting or contrast fails, leave beta/tval dicts as-is
@@ -251,7 +262,7 @@ if __name__ == "__main__":
         model2 = (
             "ds ~  C(Trial_type, Treatment(reference='IDS')) * perceptual_change_c + "
             "C(response_repeat) * C(task_repeat) + "
-            "C(task_repeat) *C(prev_target_feature_match , Treatment(reference='switch_target_feature'))"
+            "C(task_repeat) * C(prev_target_feature_match , Treatment(reference='switch_target_feature'))"
         )
         #process_subject(sub, fn = "WT", model_syntax=model2, model_tag="noRTModel")
         process_subject(sub, fn = "resRTWTT", model_syntax=model2, model_tag="noRTModel")
