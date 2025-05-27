@@ -296,9 +296,9 @@ if __name__ == "__main__":
     #for subs in subjects:
     start = datetime.now()
     print("Subjectart:", start)
-    run_func(subs, in_fn = "TrialBetas", out_fn = "WT", mnn="On")
+    # run_func(subs, in_fn = "TrialBetas", out_fn = "WT", mnn="On")
     run_func(subs, in_fn = "TrialBetas_resRT", out_fn = "resRTWT", mnn="On")
-    run_func(subs, in_fn = "TrialBetas", out_fn = "WF", mnn="Off")
-    run_func(subs, in_fn = "TrialBetas_resRT", out_fn = "resRTWF", mnn="Off")
+    # run_func(subs, in_fn = "TrialBetas", out_fn = "WF", mnn="Off")
+    # run_func(subs, in_fn = "TrialBetas_resRT", out_fn = "resRTWF", mnn="Off")
     print("End:", datetime.now(), "Duration:", datetime.now() - start)
 

@@ -167,8 +167,12 @@ behav_df = behav_df[behav_df['trial_n'] != 0]
 behav_df = behav_df[behav_df['trial_Corr'] != 0]
 behav_df = behav_df[behav_df['zRT'] <= 3]
 behav_df = behav_df[behav_df['prev_accuracy'] != 0]
+behav_df['perceptual_change_c'] = behav_df['perceptual_change'] - behav_df['perceptual_change'].mean()
 
-md = smf.mixedlm( "zRT ~ C(Trial_type, Treatment(reference='Stay')) * perceptual_change +  C(response_repeat) + C(task_repeat) * C(prev_target_feature_match , Treatment(reference='switch_target_feature'))", behav_df, groups=behav_df["sub"], re_formula="~1" )
+md = smf.mixedlm( "zRT ~C(Trial_type, Treatment(reference='IDS')) * perceptual_change_c +  " \
+"C(response_repeat) * C(task_repeat) + C(task_repeat)* C(prev_target_feature_match , Treatment(reference='switch_target_feature'))" \
+ "+ C(response_repeat) * C(prev_target_feature_match , Treatment(reference='switch_target_feature'))"  ,
+                  behav_df, groups=behav_df["sub"], re_formula="~ 1 + C(Trial_type, Treatment(reference='IDS')) + C(task_repeat) + perceptual_change_c " )
 mdf = md.fit(method="bfgs")
 print(mdf.summary())
 

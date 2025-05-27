@@ -15,13 +15,32 @@ from nilearn.masking import unmask
 import re
 
 def clean_regressor_name(reg_name):
-    # Replace complex formula labels with simplified ones
+    # 1) Explicit mappings for your key terms
+    mappings = {
+        r"C\(Trial_type,\s*Treatment\(reference=['\"]?IDS['\"]?\)\)\[T\.EDS\]": "EDS_v_IDS",
+        r"C\(Trial_type,\s*Treatment\(reference=['\"]?IDS['\"]?\)\)\[T\.Stay\]": "IDS_v_Stay",
+        r"C\(response_repeat\)\[T\.True\]:C\(task_repeat\)\[T\.True\]": "response_repeat_x_task_repeat",
+        r"C\(task_repeat\)\[T\.True\]:C\(prev_target_feature_match,\s*Treatment\(reference=['\"]?switch_target_feature['\"]?\)\)\[T\.same_target_feature\]":
+            "task_repeat_x_prev_target_feature",
+    }
+
+    for pattern, replacement in mappings.items():
+        if re.search(pattern, reg_name):
+            # Once one matches, return immediately
+            return replacement
+
+    # 2) Fallback generic cleaning
     clean = reg_name
+    # simplify any remaining C(...) contrasts
     clean = re.sub(r"C\(([^,]+),\s*Treatment\(reference=['\"]?([^'\"]+)['\"]?\)\)\[T\.([^\]]+)\]", r"\1_vs_\3", clean)
-    clean = re.sub(r"C\(([^)]+)\)\[T\.([^\]]+)\]", r"\1_vs_\2", clean)
-    clean = re.sub(r"[^\w]+", "_", clean)  # Replace anything non-alphanumeric with underscore
-    clean = re.sub(r"_+", "_", clean)      # Collapse multiple underscores
-    clean = clean.strip("_")               # Remove leading/trailing underscores
+    clean = re.sub(r"C\(([^)]+)\)\[T\.([^\]]+)\]",                           r"\1_vs_\2", clean)
+    # replace non-alphanumeric with underscore
+    clean = re.sub(r"[^\w]+", "_", clean)
+    # collapse multiple underscores
+    clean = re.sub(r"_+", "_", clean)
+    # strip leading/trailing underscores
+    clean = clean.strip("_")
+
     return clean
 
 # ------------------------ Config ------------------------
@@ -37,14 +56,12 @@ sphere_inds = np.where(mask_data > 0)
 behavior_csv = "/Shared/lss_kahwang_hpc/data/ThalHi/ThalHi_MRI_zRTs_full.csv"
 df = pd.read_csv(behavior_csv)
 
-# model_syntax = (
-#     "ds ~ zRT + C(Trial_type, Treatment(reference='IDS')) + perceptual_change + "
-#     "C(response_repeat) + C(task_repeat) + "
-#     "C(prev_target_feature_match , Treatment(reference='switch_target_feature'))"
-# )
-
 # ------------------------ Spherewise Regression ------------------------
 def regress_one_sphere(sphere_index, sdf, ds_array, model_syntax):
+    """
+    Fit OLS for one searchlight sphere, extract betas/t-values,
+    and compute both overall and condition-specific marginal effects, had to do that one by one...
+    """
     sdf = sdf.copy()
     sdf["ds"] = ds_array[sphere_index, :]
     beta = {}
@@ -52,34 +69,113 @@ def regress_one_sphere(sphere_index, sdf, ds_array, model_syntax):
 
     try:
         model = smf.ols(model_syntax, data=sdf).fit()
-        # extract all standard fixed effects
-        beta = model.params.to_dict()
-        tval = model.tvalues.to_dict()
+        params = model.params
 
-        # === EDS vs IDS contrast === #not needed by setting IDS as reference
-        # fe_names = model.params.index.tolist()
-        # fe_vals  = model.params.values
-        # k_fe     = len(fe_names)
+        # Store raw betas and t-values
+        beta.update(params.to_dict())
+        tval.update(model.tvalues.to_dict())
 
-        # try:
-        #     pos_eds = fe_names.index("C(Trial_type, Treatment(reference='Stay'))[T.EDS]")
-        #     pos_ids = fe_names.index("C(Trial_type, Treatment(reference='Stay'))[T.IDS]")
-        # except ValueError:
-        #     pass  # one or both regressors not present
-        # else:
-        #     L = np.zeros((1, k_fe))
-        #     L[0, pos_eds] = 1
-        #     L[0, pos_ids] = -1
-        #     ct = model.t_test(L)
+        # Prepare trial frequencies for weighting marginal effects
+        # Trial_type frequencies
+        freq_tt   = sdf['Trial_type'].value_counts(normalize=True)
+        p_IDS     = float(freq_tt.get('IDS', 0))
+        p_EDS     = float(freq_tt.get('EDS', 0))
+        p_Stay    = float(freq_tt.get('Stay', 0))
 
-        #     beta["EDS_vs_IDS"] = fe_vals[pos_eds] - fe_vals[pos_ids]
-        #     tval["EDS_vs_IDS"] = np.squeeze(ct.tvalue)
+        #response_repeat frequencies
+        freq_rr   = sdf['response_repeat'].value_counts(normalize=True)
+        p_resp    = float(freq_rr.get(True, 0))
 
-    except Exception as e:
-        # leave beta and tval as empty dicts (will fill with NaNs later)
+        #task_repeat frequencies
+        freq_tr   = sdf['task_repeat'].value_counts(normalize=True)
+        p_task    = float(freq_tr.get(True, 0))
+
+        #prev_target_feature_match frequencies
+        freq_prev = sdf['prev_target_feature_match'].value_counts(normalize=True)
+        p_prev    = float(freq_prev.get('same_target_feature', 0))
+
+        # perceptual_change_c and its Trial_type interactions
+        name_pc      = "perceptual_change_c"
+        name_eds_pc  = "C(Trial_type, Treatment(reference='IDS'))[T.EDS]:perceptual_change_c"
+        name_stay_pc = "C(Trial_type, Treatment(reference='IDS'))[T.Stay]:perceptual_change_c"
+        name_rr   = "C(response_repeat)[T.True]"
+        name_rrtr = f"{name_rr}:C(task_repeat)[T.True]"
+        name_tr     = "C(task_repeat)[T.True]"
+        name_prev   = [n for n in params.index if "prev_target_feature_match" in n and "]" in n][0]
+        name_trprev = f"{name_tr}:{name_prev}"
+
+        # add maringal effect and tstat via linear contrast 
+        def add_mfx(key, L):
+            ct = model.t_test(L)
+            beta[key] = float(ct.effect)
+            tval[key] = float(ct.tvalue)
+
+        #Overall  effect of perceptual_change_c (average over Trial_type)
+        L_pc = [
+            p_IDS  if n == name_pc      else
+            p_EDS  if n == name_eds_pc  else
+            p_Stay if n == name_stay_pc else
+            0
+            for n in params.index
+        ]
+        add_mfx('main_effect_perceptual_change_c', L_pc)
+
+        # perceptual change slope in IDS
+        L_ids = [1 if n == name_pc else 0 for n in params.index]
+        add_mfx('perceptual_change_for_IDS', L_ids)
+
+        # perceptual change slope in EDS = β_pc + β_eds_pc
+        L_eds = [
+            1 if n == name_pc     else
+            1 if n == name_eds_pc else
+            0
+            for n in params.index
+        ]
+        add_mfx('perceptual_change_for_EDS', L_eds)
+
+        # perceptual change slope inin Stay = β_pc + β_stay_pc
+        L_stay = [
+            1 if n == name_pc       else
+            1 if n == name_stay_pc  else
+            0
+            for n in params.index
+        ]
+        add_mfx('perceptual_change_for_Stay', L_stay)
+
+        # Main effect of response_repeat (avg over task_repeat)
+        L_rr = [
+            1      if n == name_rr   else
+            p_task if n == name_rrtr else
+            0
+            for n in params.index
+        ]
+        add_mfx('main_effect_response_repeat', L_rr)
+
+        # Main effect of task_repeat (avg over response_repeat & prev_target_feature_match)
+        L_tr = [
+            1      if n == name_tr      else
+            p_resp if n == name_rrtr    else
+            p_prev if n == name_trprev  else
+            0
+            for n in params.index
+        ]
+        add_mfx('main_effect_task_repeat', L_tr)
+
+        # Main marginal effect of prev_target_feature_match (avg over task_repeat)
+        L_prev = [
+            1      if n == name_prev    else
+            p_task if n == name_trprev  else
+            0
+            for n in params.index
+        ]
+        add_mfx('main_effect_prev_target_feature_match', L_prev)
+
+    except Exception:
+        # If fitting or contrast fails, leave beta/tval dicts as-is
         pass
 
     return beta, tval
+
 
 # ------------------------ Process One Subject ------------------------
 def process_subject(sub_id, fn, model_syntax, model_tag):
@@ -144,22 +240,22 @@ if __name__ == "__main__":
             # Define model(s)
         model1 = (
             "ds ~ zRT + C(Trial_type, Treatment(reference='IDS')) * perceptual_change_c + "
-            "C(response_repeat) + C(task_repeat) + "
-            "C(prev_target_feature_match , Treatment(reference='switch_target_feature'))"
+            "C(response_repeat) * C(task_repeat) + "
+            "C(task_repeat) * C(prev_target_feature_match , Treatment(reference='switch_target_feature'))"
         )
-        process_subject(sub, fn = "WT", model_syntax=model1, model_tag="RTModel")
-        process_subject(sub, fn = "resRTWT", model_syntax=model1, model_tag="RTModel")
-        process_subject(sub, fn = "WF", model_syntax=model1, model_tag="RTModel")
-        process_subject(sub, fn = "resRTWF", model_syntax=model1, model_tag="RTModel")
+        #process_subject(sub, fn = "WT", model_syntax=model1, model_tag="RTModel")
+        process_subject(sub, fn = "resRTWTT", model_syntax=model1, model_tag="RTModel")
+        #process_subject(sub, fn = "WF", model_syntax=model1, model_tag="RTModel")
+        #process_subject(sub, fn = "resRTWF", model_syntax=model1, model_tag="RTModel")
         
         model2 = (
             "ds ~  C(Trial_type, Treatment(reference='IDS')) * perceptual_change_c + "
-            "C(response_repeat) + C(task_repeat) + "
-            "C(prev_target_feature_match , Treatment(reference='switch_target_feature'))"
+            "C(response_repeat) * C(task_repeat) + "
+            "C(task_repeat) *C(prev_target_feature_match , Treatment(reference='switch_target_feature'))"
         )
-        process_subject(sub, fn = "WT", model_syntax=model2, model_tag="noRTModel")
-        process_subject(sub, fn = "resRTWT", model_syntax=model2, model_tag="noRTModel")
-        process_subject(sub, fn = "WF", model_syntax=model2, model_tag="noRTModel")
-        process_subject(sub, fn = "resRTWF", model_syntax=model2, model_tag="noRTModel")        
+        #process_subject(sub, fn = "WT", model_syntax=model2, model_tag="noRTModel")
+        process_subject(sub, fn = "resRTWTT", model_syntax=model2, model_tag="noRTModel")
+        #process_subject(sub, fn = "WF", model_syntax=model2, model_tag="noRTModel")
+        #process_subject(sub, fn = "resRTWF", model_syntax=model2, model_tag="noRTModel")        
         
         #process_subject(sub)
