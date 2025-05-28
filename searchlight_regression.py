@@ -40,6 +40,8 @@ sphere_inds = np.where(mask_data > 0)
 
 behavior_csv = "/Shared/lss_kahwang_hpc/data/ThalHi/ThalHi_MRI_zRTs_full.csv"
 df = pd.read_csv(behavior_csv)
+df['Errors'] = 0
+df.loc[df['trial_Corr'] == 0, 'Errors'] = 1  # Mark errors
 
 # ------------------------ Spherewise Regression ------------------------
 def regress_one_sphere(sphere_index, sdf, ds_array, model_syntax):
@@ -205,10 +207,12 @@ def process_subject(sub_id, fn, model_syntax, model_tag):
                      task_repeat=(sdf['Task'] == sdf['prev_task']).astype("category"))
     for col in ["Trial_type", "prev_target_feature_match"]:
         sdf[col] = sdf[col].astype("category")
+    # sdf = sdf[(sdf['trial_n'] != 0) &
+    #           (sdf['trial_Corr'] != 0) &
+    #           (sdf['zRT'] <= 3) &
+    #           (sdf['prev_accuracy'] != 0)].reset_index(drop=True)
     sdf = sdf[(sdf['trial_n'] != 0) &
-              (sdf['trial_Corr'] != 0) &
-              (sdf['zRT'] <= 3) &
-              (sdf['prev_accuracy'] != 0)].reset_index(drop=True)
+              (sdf['zRT'] <= 3)].reset_index(drop=True)
     sdf['perceptual_change_c'] = sdf['perceptual_change'] - sdf['perceptual_change'].mean() #center regresor
     trial_vec = (sdf['block'] - 1) * 51 + sdf['trial_n'] #figure out the trial idx after dropping trials
     ds_array = ds_array[:, trial_vec] #drop trials in the ds array
@@ -248,25 +252,10 @@ if __name__ == "__main__":
     subjects = input()
 
     for sub in [subjects]:
-            # Define model(s)
+        # Define model(s)
         model1 = (
-            "ds ~ zRT + C(Trial_type, Treatment(reference='IDS')) * perceptual_change_c + "
+            "ds ~ zRT + Errors + C(Trial_type, Treatment(reference='IDS')) * perceptual_change_c + "
             "C(response_repeat) * C(task_repeat) + "
             "C(task_repeat) * C(prev_target_feature_match , Treatment(reference='switch_target_feature'))"
         )
-        #process_subject(sub, fn = "WT", model_syntax=model1, model_tag="RTModel")
-        process_subject(sub, fn = "resRTWTT", model_syntax=model1, model_tag="RTModel")
-        #process_subject(sub, fn = "WF", model_syntax=model1, model_tag="RTModel")
-        #process_subject(sub, fn = "resRTWF", model_syntax=model1, model_tag="RTModel")
-        
-        model2 = (
-            "ds ~  C(Trial_type, Treatment(reference='IDS')) * perceptual_change_c + "
-            "C(response_repeat) * C(task_repeat) + "
-            "C(task_repeat) * C(prev_target_feature_match , Treatment(reference='switch_target_feature'))"
-        )
-        #process_subject(sub, fn = "WT", model_syntax=model2, model_tag="noRTModel")
-        process_subject(sub, fn = "resRTWTT", model_syntax=model2, model_tag="noRTModel")
-        #process_subject(sub, fn = "WF", model_syntax=model2, model_tag="noRTModel")
-        #process_subject(sub, fn = "resRTWF", model_syntax=model2, model_tag="noRTModel")        
-        
-        #process_subject(sub)
+        process_subject(sub, fn = "resRTWTT", model_syntax=model1, model_tag="RTAccuModel")
