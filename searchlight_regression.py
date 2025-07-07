@@ -38,16 +38,107 @@ mask_nii = nib.load(mask_img_path)
 mask_data = mask_nii.get_fdata()
 sphere_inds = np.where(mask_data > 0)
 
-behavior_csv = "/Shared/lss_kahwang_hpc/data/ThalHi/ThalHi_MRI_zRTs_full.csv"
+# -------- whether probe, task, response, is a repeat from previous trial? Also code errors and stay CRs CSs
+# def add_prev_match(df, var, subject_col='sub', trial_col='trial_n', block_col=None ):
+#     """
+#     For each (subject[, block]) group in df, looks up the value of `var`
+#     at trial_n-1 and adds:
+#       - prev_<var>           : the previous-trial value of var (or NaN)
+#       - <var>_repeat     : "same"/"switch" comparing var vs prev_<var>
+    
+#     Parameters
+#     ----------
+#     df : pandas.DataFrame
+#     var : str
+#         name of the column you want to compare (e.g. "pic" or "Subject_Respo")
+#     subject_col : str, default 'sub'
+#         name of the subject identifier column
+#     trial_col : str, default 'trial_n'
+#         name of the trial‐number column
+#     block_col : str or None
+#         if provided, also groups by this column so trial count resets each block
+    
+#     Returns
+#     -------
+#     df : pandas.DataFrame
+#         the same DataFrame, with two new columns added in-place:
+#           * prev_<var>
+#           * <var>_match_prev
+#     """
+#     prev_col = f'prev_{var}'
+#     flag_col = f'{var}_repeat'
+    
+#     # initialize
+#     df[prev_col] = pd.NA
+#     df[flag_col] = pd.NA
+    
+#     # decide grouping keys
+#     group_cols = [subject_col]
+#     if block_col is not None:
+#         group_cols.append(block_col)
+    
+#     # loop through groups
+#     for _, grp in df.groupby(group_cols):
+#         # mapping trial -> var for this group
+#         mapping = grp.set_index(trial_col)[var]
+#         # lookup trial-1
+#         prev_vals = grp[trial_col].sub(1).map(mapping)
+#         # write back
+#         df.loc[grp.index, prev_col] = prev_vals
+#         df.loc[grp.index, flag_col] = np.where( grp[var].eq(prev_vals), 'same', 'switch' )
+#     return df
+
+#response repeat
+#df = add_prev_match(df, var='Subject_Respo', subject_col='sub', trial_col='trial_n', block_col='block')
+#df['response_repeat'] = df['Subject_Respo_repeat']
+
+#task repeat
+#df = add_prev_match(df, var='Task', subject_col='sub', trial_col='trial_n', block_col='block')
+#df['task_repeat'] = df['Task_repeat']
+
+#probe repeat
+#df = add_prev_match(df, var='pic', subject_col='sub', trial_col='trial_n', block_col='block')
+#df['probe_repeat'] = df['pic_repeat']
+
+#cue repeat
+#df = add_prev_match(df, var='cue', subject_col='sub', trial_col='trial_n', block_col='block')
+
+#now recode stay trials into cue repeat or cue switch
+#df.loc[(df['Trial_type']=='Stay') & (df['cue_repeat']=='same'), 'Trial_type'] = 'Stay_CR'
+#df.loc[(df['Trial_type']=='Stay') & (df['cue_repeat']=='switch'), 'Trial_type'] = 'Stay_CS'
+
+#save this df
+#behavior_csv = "/Shared/lss_kahwang_hpc/data/ThalHi/ThalHi_MRI_zRTs_full_repeats.csv"
+#df.to_csv(behavior_csv)
+
+# load updated df
+behavior_csv = "/Shared/lss_kahwang_hpc/data/ThalHi/ThalHi_MRI_zRTs_full2.csv"
 df = pd.read_csv(behavior_csv)
-df['Errors'] = 0
-df.loc[df['trial_Corr'] == 0, 'Errors'] = 1  # Mark errors
+df['Errors'] = 1*(df['trial_Corr']!=1)
+df.loc[df['resp_switch'] == "Switch", "resp_switch"] = "switch"
+df.loc[df['resp_switch'] == "Same", "resp_switch"] = "same"
+df.loc[df['task_switch'] == "Switch", "task_switch"] = "switch"
+df.loc[df['task_switch'] == "Same", "task_switch"] = "same"
+
+df["response_repeat"] = df["resp_switch"]
+df["task_repeat"] = df["task_switch"]
+df["probe_repeat"] = df["probe_switch"]
+
+
+# combine stay trials
+# df.loc[df['Trial_type']=='Stay_CS', 'Trial_type'] = 'Stay'
+# df.loc[df['Trial_type']=='Stay_CR', 'Trial_type'] = 'Stay'
+# df = df[(df['trial_n'] != 0) &
+#           (df['trial_Corr'] != 0) &
+#           (df['zRT'] < 3) &
+#           (df['prev_accuracy'] != 0)].reset_index(drop=True)
+
 
 # ------------------------ Spherewise Regression ------------------------
 def regress_one_sphere(sphere_index, sdf, ds_array, model_syntax):
     """
     Fit OLS for one searchlight sphere, extract betas/t-values,
-    and compute both overall and condition-specific marginal effects, had to do that one by one...
+    and compute main + marginal effects for Trial_type = {IDS, EDS, Stay}.
     """
     sdf = sdf.copy()
     sdf["ds"] = ds_array[sphere_index, :]
@@ -55,139 +146,115 @@ def regress_one_sphere(sphere_index, sdf, ds_array, model_syntax):
     tval = {}
 
     try:
-        model = smf.ols(model_syntax, data=sdf).fit()
+        model  = smf.ols(model_syntax, data=sdf).fit()
         params = model.params
 
-        # Store raw betas and t-values
+        # 1) raw betas & t-values
         beta.update(params.to_dict())
         tval.update(model.tvalues.to_dict())
 
-        # Prepare trial frequencies for weighting marginal effects
-        # Trial_type frequencies
-        freq_tt   = sdf['Trial_type'].value_counts(normalize=True)
-        p_IDS     = float(freq_tt.get('IDS', 0))
-        p_EDS     = float(freq_tt.get('EDS', 0))
-        p_Stay    = float(freq_tt.get('Stay', 0))
+        # 2) frequencies for Trial_type
+        freq_tt = sdf['Trial_type'].value_counts(normalize=True)
+        p_IDS   = float(freq_tt.get('IDS',  0))
+        p_EDS   = float(freq_tt.get('EDS',  0))
+        p_Stay  = float(freq_tt.get('Stay', 0))
 
-        #response_repeat frequencies
-        freq_rr   = sdf['response_repeat'].value_counts(normalize=True)
-        p_resp    = float(freq_rr.get(True, 0))
+        # frequencies for other factors
+        p_resp = float(sdf['response_repeat']
+                         .value_counts(normalize=True)
+                         .get('switch', 0))
+        p_task = float(sdf['task_repeat']
+                         .value_counts(normalize=True)
+                         .get('switch', 0))
+        p_prev = float(sdf['prev_target_feature_match']
+                         .value_counts(normalize=True)
+                         .get('same_target_feature', 0))
 
-        #task_repeat frequencies
-        freq_tr   = sdf['task_repeat'].value_counts(normalize=True)
-        p_task    = float(freq_tr.get(True, 0))
+        # 3) parameter‐name shortcuts
+        name_pc       = "perceptual_change_c"
+        name_eds_pc   = "C(Trial_type, Treatment(reference='IDS'))[T.EDS]:perceptual_change_c"
+        name_stay_pc  = "C(Trial_type, Treatment(reference='IDS'))[T.Stay]:perceptual_change_c"
 
-        #prev_target_feature_match frequencies
-        freq_prev = sdf['prev_target_feature_match'].value_counts(normalize=True)
-        p_prev    = float(freq_prev.get('same_target_feature', 0))
+        name_eds_main = "C(Trial_type, Treatment(reference='IDS'))[T.EDS]"
+        name_stay_main= "C(Trial_type, Treatment(reference='IDS'))[T.Stay]"
 
-        # variable names...
-        name_pc      = "perceptual_change_c"
-        name_eds_pc  = "C(Trial_type, Treatment(reference='IDS'))[T.EDS]:perceptual_change_c"
-        name_stay_pc = "C(Trial_type, Treatment(reference='IDS'))[T.Stay]:perceptual_change_c"
-        name_rr   = "C(response_repeat)[T.True]"
-        name_rrtr = f"{name_rr}:C(task_repeat)[T.True]"
-        name_tr     = "C(task_repeat)[T.True]"
+        name_rr   = "C(response_repeat)[T.switch]"
+        name_rrtr = f"{name_rr}:C(task_repeat)[T.switch]"
+
+        name_tr     = "C(task_repeat)[T.switch]"
         name_prev   = [n for n in params.index if "prev_target_feature_match" in n and "]" in n][0]
         name_trprev = f"{name_tr}:{name_prev}"
-        name_eds_main  = "C(Trial_type, Treatment(reference='IDS'))[T.EDS]"
-        name_stay_main = "C(Trial_type, Treatment(reference='IDS'))[T.Stay]"
 
-        # add maringal effect and tstat via linear contrast 
+        # helper to add a contrast
         def add_mfx(key, L):
             ct = model.t_test(L)
             beta[key] = float(ct.effect)
             tval[key] = float(ct.tvalue)
 
-        #Overall  effect of perceptual_change_c (average over Trial_type)
+        # 4) Marginal effects for perceptual_change_c
+        # 4a) overall (weighted across IDS, EDS, Stay)
         L_pc = [
-            p_IDS  if n == name_pc      else
-            p_EDS  if n == name_eds_pc  else
-            p_Stay if n == name_stay_pc else
+            p_IDS   if n==name_pc      else
+            p_EDS   if n==name_eds_pc  else
+            p_Stay  if n==name_stay_pc else
             0
             for n in params.index
         ]
         add_mfx('main_effect_perceptual_change_c', L_pc)
 
-        # perceptual change slope in IDS
-        L_ids = [1 if n == name_pc else 0 for n in params.index]
-        add_mfx('perceptual_change_for_IDS', L_ids)
+        # 4b) per-level slopes
+        add_mfx('perceptual_change_for_IDS',
+                [1 if n==name_pc else 0 for n in params.index])
+        add_mfx('perceptual_change_for_EDS',
+                [1 if n in (name_pc,name_eds_pc) else 0 for n in params.index])
+        add_mfx('perceptual_change_for_Stay',
+                [1 if n in (name_pc,name_stay_pc) else 0 for n in params.index])
 
-        # perceptual change slope in EDS = β_pc + β_eds_pc
-        L_eds = [
-            1 if n == name_pc     else
-            1 if n == name_eds_pc else
-            0
-            for n in params.index
-        ]
-        add_mfx('perceptual_change_for_EDS', L_eds)
-
-        # perceptual change slope inin Stay = β_pc + β_stay_pc
-        L_stay = [
-            1 if n == name_pc       else
-            1 if n == name_stay_pc  else
-            0
-            for n in params.index
-        ]
-        add_mfx('perceptual_change_for_Stay', L_stay)
-
-        # Main effect of response_repeat (avg over task_repeat)
+        # 5) Marginal/main effects for other predictors
+        # response_repeat overall
         L_rr = [
-            1      if n == name_rr   else
-            p_task if n == name_rrtr else
+            1      if n==name_rr    else
+            p_task if n==name_rrtr else
             0
             for n in params.index
         ]
         add_mfx('main_effect_response_repeat', L_rr)
 
-        # Main effect of task_repeat (avg over response_repeat & prev_target_feature_match)
+        # task_repeat overall
         L_tr = [
-            1      if n == name_tr      else
-            p_resp if n == name_rrtr    else
-            p_prev if n == name_trprev  else
+            1      if n==name_tr      else
+            p_resp if n==name_rrtr    else
+            p_prev if n==name_trprev  else
             0
             for n in params.index
         ]
         add_mfx('main_effect_task_repeat', L_tr)
 
-        # Main marginal effect of prev_target_feature_match (avg over task_repeat)
+        # prev_target_feature_match overall
         L_prev = [
-            1      if n == name_prev    else
-            p_task if n == name_trprev  else
+            1      if n==name_prev   else
+            p_task if n==name_trprev else
             0
             for n in params.index
         ]
         add_mfx('main_effect_prev_target_feature_match', L_prev)
 
-        #Main effect: EDS vs IDS
-        L_eds_main = [
-            1 if n == name_eds_main else
-            0
-            for n in params.index
-        ]
-        add_mfx('main_effect_EDS_v_IDS', L_eds_main)
+        # 6) Main effects of Trial_type contrasts
+        add_mfx('main_effect_EDS_v_IDS',
+                [1 if n==name_eds_main else 0 for n in params.index])
+        add_mfx('main_effect_IDS_v_Stay',
+                [1 if n==name_stay_main else 0 for n in params.index])
 
-        #IDS vs Stay
-        L_stay_main = [
-            1 if n == name_stay_main else
-            0
-            for n in params.index
-        ]
-        add_mfx('main_effect_IDS_v_Stay', L_stay_main)
-
-        # response_repeat × task_repeat
-        L_rrtr_int = [
-            1 if n == name_rrtr else
-            0
-            for n in params.index
-        ]
-        add_mfx('response_repeat_x_task_repeat', L_rrtr_int)
+        # 7) Interaction of response_repeat × task_repeat
+        add_mfx('interaction_response_repeat_x_task_repeat',
+                [1 if n==name_rrtr else 0 for n in params.index])
 
     except Exception:
-        # If fitting or contrast fails, leave beta/tval dicts as-is
+        # leave beta/tval empty on error
         pass
 
     return beta, tval
+
 
 
 # ------------------------ Process One Subject ------------------------
@@ -203,10 +270,9 @@ def process_subject(sub_id, fn, model_syntax, model_tag):
 
     # Load and prepare behavioral data
     sdf = df[df["sub"] == int(sub_id)].copy().sort_values(["block", "trial_n"]).reset_index(drop=True)
-    sdf = sdf.assign(response_repeat=(sdf['Subject_Respo'] == sdf['prev_resp']).astype("category"),
-                     task_repeat=(sdf['Task'] == sdf['prev_task']).astype("category"))
-    for col in ["Trial_type", "prev_target_feature_match"]:
-        sdf[col] = sdf[col].astype("category")
+    for col in ["probe_repeat", "response_repeat", "task_repeat", "Trial_type", "prev_target_feature_match"]:
+        sdf[col] = sdf[col].astype("category")    
+
     # sdf = sdf[(sdf['trial_n'] != 0) &
     #           (sdf['trial_Corr'] != 0) &
     #           (sdf['zRT'] <= 3) &
@@ -253,9 +319,18 @@ if __name__ == "__main__":
 
     for sub in [subjects]:
         # Define model(s)
+        # model1 = (
+        #     "ds ~ zRT + Errors + C(Trial_type, Treatment(reference='IDS')) * perceptual_change_c + "
+        #     "C(response_repeat) * C(task_repeat) + "
+        #     "C(task_repeat) * C(prev_target_feature_match , Treatment(reference='switch_target_feature'))"
+        # )
+        # process_subject(sub, fn = "resRTWTT", model_syntax=model1, model_tag="RTAccuModel")
+
         model1 = (
             "ds ~ zRT + Errors + C(Trial_type, Treatment(reference='IDS')) * perceptual_change_c + "
             "C(response_repeat) * C(task_repeat) + "
-            "C(task_repeat) * C(prev_target_feature_match , Treatment(reference='switch_target_feature'))"
+            "C(task_repeat) * C(prev_target_feature_match , Treatment(reference='switch_target_feature')) +"
+            "C(response_repeat) * C(prev_target_feature_match , Treatment(reference='switch_target_feature')) +" \
+            "C(probe_repeat)"
         )
-        process_subject(sub, fn = "resRTWTT", model_syntax=model1, model_tag="RTAccuModel")
+        process_subject(sub, fn = "resRTWTT", model_syntax=model1, model_tag="ProbeFeatureRTAccuModel")
