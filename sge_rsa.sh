@@ -4,8 +4,8 @@
 #$ -e /Users/kahwang/sge_logs
 #$ -q SEASHORE
 #$ -t 1-59
-#$ -tc 20
-#$ -pe smp 16
+#$ -tc 4
+#$ -pe smp 24
 ##### 1-4740
 ##$ -l mem_free=32G
 #!/bin/bash
@@ -28,6 +28,8 @@ echo ${sub}
 #echo $sub | python /Users/kahwang/bin/IntegrativeHubs/GLMsingle_rsa.py
 #echo $sub | python /Users/kahwang/bin/IntegrativeHubs/trial_regression.py
 #echo $sub | python /Users/kahwang/bin/IntegrativeHubs/searchlight_rsa.py
-echo $sub | python /Users/kahwang/bin/IntegrativeHubs/searchlight_regression.py
+#echo $sub | python /Users/kahwang/bin/IntegrativeHubs/searchlight_regression.py
+#echo $sub | python /Users/kahwang/bin/IntegrativeHubs/distance_modulation.py
+echo $sub | python /Users/kahwang/bin/IntegrativeHubs/thalamocortical_FC.py
 
 ##
