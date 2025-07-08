@@ -131,8 +131,12 @@ def compute_trial_corr(trial, times, channel_data):
         for t2 in range(n_times):
             x = channel_data[:, trial, t1]
             y = channel_data[:, trial + 1, t2]
-            coefs[t1, t2] = polynomial_kernel_distance(x, y)
-            #coefs[t1, t2] = np.corrcoef(x, y)[0, 1]
+            #coefs[t1, t2] = polynomial_kernel_distance(x, y)
+            r = np.corrcoef(x, y)[0, 1]
+            if np.isnan(r):
+                r = 0
+            #convert to correlation distance
+            coefs[t1, t2] = np.sqrt(2 * (1 - r))
     return coefs
 
 
