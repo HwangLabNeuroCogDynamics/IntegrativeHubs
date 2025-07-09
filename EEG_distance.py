@@ -98,7 +98,9 @@ noise_cov = mne.compute_covariance( resid, tmin=None, tmax=None, method="shrunk"
 
 # Build the whitening operator
 whitener = mne.cov.compute_whitener(noise_cov, resid.info, picks=picks, return_rank=False, return_colorer=False)
-
+if isinstance(whitener, tuple):
+    whitener, _ = whitener
+    
 epoch_data = all_probe.get_data()[:, picks, :] #trial by channels by timepoints
 # whiten the data
 channel_x_trials_corrected = np.einsum('ij, ejt -> eit', whitener, epoch_data) #this trials by channel by timepoints
