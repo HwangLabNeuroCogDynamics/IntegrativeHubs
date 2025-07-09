@@ -6,48 +6,66 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.ndimage import label
 from scipy import stats
+from joblib import Parallel, delayed
 
-# your permutation function (with the missing import added)
-def matrix_permutation(M1, M2, threshold, p, ttest=True):
-    """ randomize permutation test for element wise comparison """
+#permutation function
+def _one_perm_mass(dM, threshold, ttest):
+    # pick random ±1 signs for each subject, broadcast to (sub, x, y)
+    signs = (2*np.random.randint(0,2,size=dM.shape[0]) - 1)[:,None,None]
+    perm  = dM * signs
+
+    # compute either t‐map or mean‐map
+    if ttest:
+        mat = stats.ttest_1samp(perm, 0, axis=0)[0]
+    else:
+        mat = perm.mean(axis=0)
+
+    # find largest absolute cluster‐mass
+    best = 0
+    # positive clusters
+    cmat, ncl = label(mat > threshold)
+    for c in range(1, ncl+1):
+        mass = mat[cmat==c].sum()
+        if mass > best: best = mass
+    # negative clusters
+    cmat, ncl = label(mat < -threshold)
+    for c in range(1, ncl+1):
+        mass = -mat[cmat==c].sum()
+        if mass > best: best = mass
+
+    return best
+
+def matrix_permutation(M1, M2, threshold, p, ttest=True, n_jobs=16):
+    """ cluster‐mass permutation test, parallelized over iterations """
     if M1.shape != M2.shape:
         raise ValueError("M1 and M2 must have same shape")
-    num_sub = M1.shape[0]
-    dM      = M1 - M2
-    null_mass = np.zeros(5000, float)
-    for it in range(5000):
-        signs = (2*np.random.randint(0,2,size=num_sub)-1)[:,None,None]
-        perm = dM * signs
-        if ttest:
-            mat  = stats.ttest_1samp(perm, 0, axis=0)[0]
-        else:
-            mat  = perm.mean(axis=0)
-        # find the largest cluster‐mass
-        mass = 0
-        cmat, ncl = label(mat > threshold)
-        for c in range(1, ncl+1):
-            m = mat[cmat==c].sum()
-            if m>mass: mass = m
-        cmat, ncl = label(mat < -threshold)
-        for c in range(1, ncl+1):
-            m = -mat[cmat==c].sum()
-            if m>mass: mass = m
-        null_mass[it] = mass
+    dM = M1 - M2
 
+    # 1) compute null distribution in parallel
+    null_mass = Parallel(n_jobs=n_jobs, verbose=5)(
+        delayed(_one_perm_mass)(dM, threshold, ttest)
+        for _ in range(5000)
+    )
+    null_mass = np.array(null_mass, float)
+
+    # 2) get cluster‐mass thresholds
     pos_thr = np.quantile(null_mass, 1-0.5*p)
     neg_thr = np.quantile(null_mass, 0.5*p)
 
-    # observed
+    # 3) compute observed statistic
     if ttest:
         obs = stats.ttest_1samp(dM, 0, axis=0)[0]
     else:
         obs = dM.mean(axis=0)
 
+    # 4) form mask of significant clusters
     mask = np.zeros_like(obs, bool)
+    # positive
     cmat, ncl = label(obs > threshold)
     for c in range(1, ncl+1):
         if obs[cmat==c].sum() > pos_thr:
             mask[cmat==c] = True
+    # negative
     cmat, ncl = label(obs < -threshold)
     for c in range(1, ncl+1):
         if (-obs[cmat==c]).sum() > neg_thr:
@@ -101,6 +119,7 @@ for p, M in group_data.items():
     plt.xlabel("Trial N timepoint")
     plt.ylabel("Trial N-1 timepoint")
     plt.tight_layout()
+    plt.show()
     plt.savefig(os.path.join(out_fig_dir, f"tmap_{p}.png"))
     plt.close()
 
