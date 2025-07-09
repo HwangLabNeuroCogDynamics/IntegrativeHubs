@@ -1,23 +1,12 @@
 ####################################################################
 # Script to calculate EEG distance for ThalHi EEG data
 ####################################################################
-from sklearn.model_selection import train_test_split, ShuffleSplit, cross_val_score, cross_val_predict, KFold
-from sklearn.model_selection import LeaveOneOut
-from scipy.stats import zscore
-from scipy.special import logit
-from mne.time_frequency import tfr_morlet
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from datetime import datetime
 import numpy as np
 import pandas as pd
 import mne
 import os
-import nibabel as nib
-import glob
 from datetime import datetime
 import scipy
-import nilearn
-from nilearn.maskers import NiftiLabelsMasker
 from joblib import Parallel, delayed
 
 def compute_inv_shrunk_covariance(x):
@@ -99,18 +88,33 @@ this_sub_path=ROOT+ 'eeg_preproc_RespToReviewers/' +str(sub)
 all_probe = mne.read_epochs(this_sub_path+'/probe events-epo.fif')
 all_probe.baseline = None
 times = all_probe.times
-inv_sigma_epochs = np.zeros((64, 64, len(times)))
-epoch_data = all_probe.get_data()
+picks = mne.pick_types(all_probe.info, meg=False, eeg=True, eog=False, stim=False)
 
-# calcuate cov for each epoch timepoint
-for t in np.arange(len(times)):
-    inv_sigma_epochs[:,:, t] = scipy.linalg.fractional_matrix_power(compute_inv_shrunk_covariance(epoch_data[:,0:64,t]),0.5) 
+evoked = all_probe.average() #calculate evoked response
+resid  = all_probe.copy().subtract_evoked(evoked) #get residuals
 
-# normalize by noise cov 
-channel_x_trials_corrected = np.zeros((64,epoch_data.shape[0]  , len(times)))
-for t in np.arange(len(times)):
-    channel_x_trials = epoch_data[:,0:64, t].T
-    channel_x_trials_corrected[:,:, t] = np.dot(inv_sigma_epochs[:,:,t],channel_x_trials)
+#  Estimate the noise covariance from those residuals
+noise_cov = mne.compute_covariance( resid, tmin=None, tmax=None, method="shrunk")
+
+# Build the whitening operator
+whitener = mne.cov.compute_whitener(noise_cov, resid.info, picks=picks, return_rank=False, return_colorer=False)
+
+epoch_data = all_probe.get_data()[:, picks, :] #trial by channels by timepoints
+# whiten the data
+channel_x_trials_corrected = np.einsum('ij, ejt -> eit', whitener, epoch_data) #this trials by channel by timepoints
+
+
+### old approach to compute the inverse covariance for each epoch timepoint
+# inv_sigma_epochs = np.zeros((64, 64, len(times)))
+# # calcuate cov for each epoch timepoint
+# for t in np.arange(len(times)):
+#     inv_sigma_epochs[:,:, t] = scipy.linalg.fractional_matrix_power(compute_inv_shrunk_covariance(epoch_data[:,0:64,t]),0.5) 
+
+# # normalize by noise cov 
+# channel_x_trials_corrected = np.zeros((64,epoch_data.shape[0]  , len(times)))
+# for t in np.arange(len(times)):
+#     channel_x_trials = epoch_data[:,0:64, t].T
+#     channel_x_trials_corrected[:,:, t] = np.dot(inv_sigma_epochs[:,:,t],channel_x_trials)
 
 
 def compute_trial_corr(trial, times, channel_data):
@@ -126,33 +130,32 @@ def compute_trial_corr(trial, times, channel_data):
         coefs (ndarray): 2D array with shape (len(times), len(times)) containing correlations
     """
     n_times = len(times)
-    coefs = np.zeros((n_times, n_times))
-    for t1 in range(n_times):
-        for t2 in range(n_times):
-            x = channel_data[:, trial, t1]
-            y = channel_data[:, trial + 1, t2]
+    coefs = np.zeros((len(range(0,n_times,10)), len(range(0,n_times,10)))) ## instead of full timepoints, only compute every 10th timepoint
+    for it1,t1 in enumerate(range(0,n_times,10)):
+        for it2,t2 in enumerate(range(0, n_times, 10)):
+            x = channel_data[trial, :, t1]
+            y = channel_data[trial - 1,:, t2] #distance from the previous trial
             #coefs[t1, t2] = polynomial_kernel_distance(x, y)
             r = np.corrcoef(x, y)[0, 1]
             if np.isnan(r):
                 r = 0
             #convert to correlation distance
-            coefs[t1, t2] = np.sqrt(2 * (1 - r))
+            coefs[it1, it2] = np.sqrt(2 * (1 - r))
     return coefs
 
-
-n_trials = epoch_data.shape[0] - 1
-n_times = len(times)
-# Prepare output matrix (note: last trial remains zeros, as the loop uses trial+1)
-coef_mat = np.zeros((epoch_data.shape[0], n_times, n_times))
+n_trials = epoch_data.shape[0]
+n_times = len(range(0,len(times),10))
+# Prepare output matrix
+coef_mat = np.zeros((n_trials, n_times, n_times))
 
 # Parallelize the computation over trials:
-results = Parallel(n_jobs=24)(
+results = Parallel(n_jobs=16)(
     delayed(compute_trial_corr)(trial, times, channel_x_trials_corrected)
-    for trial in range(n_trials))
+    for trial in range(1, n_trials)) #starting from 2nd trial to compare with the previous one
 
 # Fill in the computed correlation matrices:
 for trial, corr_mat in enumerate(results):
-    coef_mat[trial] = corr_mat
+    coef_mat[trial+1] = corr_mat
 
 outfn = '/Shared/lss_kahwang_hpc/ThalHi_data/RSA/distance_results/' + str(sub) + '_coef_mat.npy'
 np.save(outfn, coef_mat)
