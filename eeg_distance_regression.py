@@ -124,9 +124,10 @@ coef_mat = np.load('/Shared/lss_kahwang_hpc/ThalHi_data/RSA/distance_results/' +
 if len(trial_vector) != coef_mat.shape[0]:
     raise ValueError("Length of trial_vector does not match the number of trials in coef_mat. That means there are fewer trials in DF than the meta df in the coef_mat. Please check your data.")
 
-coef_mat[1:] = coef_mat[:-1]
-# Now set the first slice to NaNs:
-coef_mat[0].fill(np.nan)
+# below no longer needed
+# coef_mat[1:] = coef_mat[:-1]
+# # Now set the first slice to NaNs:
+# coef_mat[0].fill(np.nan)
 
 #coef_mat = coef_mat[trial_vector,:,:]
 df = df.loc[trial_vector, :].reset_index(drop=True)
@@ -271,25 +272,24 @@ model_syntax = (
     "C(prev_target_feature_match , Treatment(reference='switch_target_feature')) +"
     "C(probe_repeat)")
 
-# 1) Define your t1/t2 grid exactly as in your Parallel call
-t1s = list(range(0, num_tps, 10))
-t2s = list(range(0, num_tps, 10))
+# Define your t1/t2 grid exactly as in your Parallel call
+t1s = list(range(0, num_tps))
+t2s = list(range(0, num_tps))
 n1, n2 = len(t1s), len(t2s)
 
-# 2) Run your Parallel (unchanged) to get flat lists of dicts
+# 2 Run your Parallel (unchanged) to get flat lists of dicts
 results = Parallel(n_jobs=16)( delayed(process_regression)(t1, t2, coef_mat, df, model_syntax) for t1, t2 in product(t1s, t2s) )
 beta_dicts, tval_dicts = zip(*results)  # two tuples of length n1*n2
 
-# 3) Get the full set of parameter names (keys)
+# Get the full set of parameter names (keys)
 all_params = sorted(set().union(*beta_dicts))
 
-# 4) Pre-allocate arrays for each param
+# Pre-allocate arrays for each param
 beta_maps = {p: np.full((n1, n2), np.nan, dtype=np.float32)
              for p in all_params}
 tval_maps = {p: np.full((n1, n2), np.nan, dtype=np.float32)
              for p in all_params}
 
-# 5) Fill them in
 idx = 0
 for i, t1 in enumerate(t1s):
     for j, t2 in enumerate(t2s):
