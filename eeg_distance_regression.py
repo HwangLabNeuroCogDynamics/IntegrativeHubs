@@ -135,14 +135,14 @@ df['trial_vector'] = trial_vector
 num_tps = coef_mat.shape[1]  # Number of time points    
 
 ## now the regression 
-def process_regression(t1, t2, coef_mat, df, model_syntax):
+def process_regression(t1, coef_mat, df, model_syntax):
     """
-    Process a single (t1, t2) iteration: build the DataFrame,
+    Process a single (t1) iteration: build the DataFrame, #add t2 if doing matrix
     drop run breaks and NaNs, run the regression, and return a list of results.
     """
     #build dataframe for regression
     df = df.copy()
-    df['ds'] = coef_mat[:, t1, t2]
+    df['ds'] = coef_mat[:, t1]
     df = df[(df['trial_n'] != 0) & (df['zRT'] <= 3) & (df['zRT'] > -3)].reset_index(drop=True) #drop first trial of each block and slow RT trials
     df['perceptual_change_c'] = df['perceptual_change'] - df['perceptual_change'].mean() #center regresor    
     
@@ -278,28 +278,27 @@ t2s = list(range(0, num_tps))
 n1, n2 = len(t1s), len(t2s)
 
 # 2 Run your Parallel (unchanged) to get flat lists of dicts
-results = Parallel(n_jobs=16)( delayed(process_regression)(t1, t2, coef_mat, df, model_syntax) for t1, t2 in product(t1s, t2s) )
+results = Parallel(n_jobs=16)( delayed(process_regression)(t1, coef_mat, df, model_syntax) for t1 in t1s )
 beta_dicts, tval_dicts = zip(*results)  # two tuples of length n1*n2
 
 # Get the full set of parameter names (keys)
 all_params = sorted(set().union(*beta_dicts))
 
 # Pre-allocate arrays for each param
-beta_maps = {p: np.full((n1, n2), np.nan, dtype=np.float32)
+beta_maps = {p: np.full((n1), np.nan, dtype=np.float32)
              for p in all_params}
-tval_maps = {p: np.full((n1, n2), np.nan, dtype=np.float32)
+tval_maps = {p: np.full((n1), np.nan, dtype=np.float32)
              for p in all_params}
 
 idx = 0
 for i, t1 in enumerate(t1s):
-    for j, t2 in enumerate(t2s):
         bdict = beta_dicts[idx]
         tdict = tval_dicts[idx]
         for p in all_params:
             if p in bdict:
-                beta_maps[p][i, j]  = bdict[p]
-                tval_maps[p][i, j]  = tdict[p]
+                beta_maps[p][i]  = bdict[p]
+                tval_maps[p][i]  = tdict[p]
         idx += 1
 
 np.savez('/Shared/lss_kahwang_hpc/ThalHi_data/RSA/distance_results/' + str(sub) + '_model_betas_results.npz', **beta_maps)
-
+np.savez('/Shared/lss_kahwang_hpc/ThalHi_data/RSA/distance_results/' + str(sub) + '_model_tvals_results.npz', **tval_maps)

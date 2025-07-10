@@ -86,7 +86,9 @@ sub = input()
 this_sub_path=ROOT+ 'eeg_preproc_RespToReviewers/' +str(sub)
 
 all_probe = mne.read_epochs(this_sub_path+'/probe events-epo.fif')
-all_probe.baseline = None
+all_probe.baseline = [None, -0.5]
+all_probe = all_probe.filter(l_freq=0.5, h_freq=30) #apply bandpass filter
+all_probe = all_probe.apply_baseline() #apply baseline correction
 times = all_probe.times
 picks = mne.pick_types(all_probe.info, meg=False, eeg=True, eog=False, stim=False)
 
@@ -94,13 +96,13 @@ evoked = all_probe.average() #calculate evoked response
 resid  = all_probe.copy().subtract_evoked(evoked) #get residuals
 
 #  Estimate the noise covariance from those residuals
-noise_cov = mne.compute_covariance( resid, tmin=None, tmax=None, method="shrunk")
+noise_cov = mne.compute_covariance( resid, tmin=None, tmax=-0.5, method="shrunk")
 
 # Build the whitening operator
 whitener = mne.cov.compute_whitener(noise_cov, resid.info, picks=picks, return_rank=False, return_colorer=False)
 if isinstance(whitener, tuple):
     whitener, _ = whitener
-    
+
 epoch_data = all_probe.get_data()[:, picks, :] #trial by channels by timepoints
 # whiten the data
 channel_x_trials_corrected = np.einsum('ij, ejt -> eit', whitener, epoch_data) #this trials by channel by timepoints
@@ -132,23 +134,25 @@ def compute_trial_corr(trial, times, channel_data):
         coefs (ndarray): 2D array with shape (len(times), len(times)) containing correlations
     """
     n_times = len(times)
-    coefs = np.zeros((len(range(0,n_times,10)), len(range(0,n_times,10)))) ## instead of full timepoints, only compute every 10th timepoint
-    for it1,t1 in enumerate(range(0,n_times,10)):
-        for it2,t2 in enumerate(range(0, n_times, 10)):
-            x = channel_data[trial, :, t1]
-            y = channel_data[trial - 1,:, t2] #distance from the previous trial
-            #coefs[t1, t2] = polynomial_kernel_distance(x, y)
+    #coefs = np.zeros((len(range(0,n_times,10)), len(range(0,n_times,10)))) ## instead of full timepoints, only compute every 10th timepoint
+    coefs = np.zeros(n_times)
+    for it1,t1 in enumerate(times):   #enumerate(range(0,n_times,10))
+        #for it2,t2 in enumerate(range(0, n_times, 10)): 
+            x = channel_data[trial, :, it1]
+            y = channel_data[trial - 1,:, it1] #distance from the previous trial
+            #coefs[it1] = polynomial_kernel_distance(x, y)
+            #coefs[it1]  = np.linalg.norm(x - y)
             r = np.corrcoef(x, y)[0, 1]
             if np.isnan(r):
                 r = 0
             #convert to correlation distance
-            coefs[it1, it2] = np.sqrt(2 * (1 - r))
+            coefs[it1] = np.sqrt(2 * (1 - r))
     return coefs
 
 n_trials = epoch_data.shape[0]
-n_times = len(range(0,len(times),10))
+n_times = len(times) #len(range(0,len(times),10))
 # Prepare output matrix
-coef_mat = np.zeros((n_trials, n_times, n_times))
+coef_mat = np.zeros((n_trials, n_times))
 
 # Parallelize the computation over trials:
 results = Parallel(n_jobs=16)(
