@@ -1,9 +1,8 @@
 ####################################################################
 # Script to run GLMsingle on the ThalHi dataset
 ####################################################################
-# -----------------------------------------------------------------
+
 # References & resources
-# -----------------------------------------------------------------
 # Install GLMsingle:
 #   On thalamege: pip install --user git+https://github.com/cvnlab/GLMsingle.git
 #   On argon:     source activate <env> && pip install git+https://github.com/cvnlab/GLMsingle.git
@@ -31,10 +30,9 @@ TR = 1.8
 stim_shift = 0.6   # 6s delay per Dillan’s code − (3 * 1.8s dropped) = 0.6s
 # subjects = pd.read_csv("/Shared/lss_kahwang_hpc/data/ThalHi/3dDeconvolve_fdpt4/usable_subjs.csv")['sub']
 subjects = input()  # hardcode subject ID here for testing
-# -------------------------------------------------
 
 
-# ======== Voxelwise GLM helpers ========
+# ======== Voxelwise GLM function ========
 def voxelwise_glm(Y, design_df, formula, masker: NiftiMasker, out_dir: str, prefix: str, n_jobs: int = 24):
     """
     Mass-univariate OLS per voxel, parallelized.

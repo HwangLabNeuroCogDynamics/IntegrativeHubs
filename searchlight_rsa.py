@@ -113,7 +113,6 @@ def new_apply_mask_and_get_affinity(seeds, niimg, radius, allow_overlap, mask_im
         raise ValueError("Overlap detected between spheres")
 
     return X, A_sparse.tocsr()
-# ========================================
 
 
 # ======== Shrinkage & whitening (Walther 2016, RSA toolbox) ========

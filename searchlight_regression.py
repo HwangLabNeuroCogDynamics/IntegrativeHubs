@@ -236,7 +236,7 @@ df["task_repeat"]     = df["task_switch"]
 df["probe_repeat"]    = df["probe_switch"]
 
 
-# ------------------------ Run All Subjects ------------------------
+# Run All Subjects 
 if __name__ == "__main__":
     # all_files = [f for f in os.listdir(data_dir) if f.endswith("_sl_adjcorr.npy")]
     # subjects = sorted(set(f.split("_")[0] for f in all_files))
