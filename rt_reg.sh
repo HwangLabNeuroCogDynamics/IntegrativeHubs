@@ -1,4 +1,4 @@
-# Base directory containing sub-*/ folders
+# Use 3dTproject to regress out trial by trial RT from the GLM single Beta
 GLMSINGLE_DIR="/home/kahwang/argon/data/ThalHi/GLMsingle"
 
 # Loop over each subject folder

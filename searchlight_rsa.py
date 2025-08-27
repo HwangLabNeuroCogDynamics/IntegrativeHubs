@@ -1,10 +1,19 @@
+####################################################################
+# Searchlight adj trial neural distance script
+# - Fast custom affinity function for spheres
+# - Computes correlation distances between adjacent trials --- Neural Distance!
+####################################################################
+
 import os
-### this is necessary when using joblib to avoid parallelization issues
+# -----------------------------------------------------------------
+# Environment variables needed when using joblib to avoid threading issues
+# -----------------------------------------------------------------
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
 os.environ["NUMEXPR_NUM_THREADS"] = "1"
+
 import warnings
 import numpy as np
 import nibabel as nib
@@ -14,32 +23,27 @@ from scipy.linalg import eigh
 from scipy.spatial.distance import pdist, squareform
 from sklearn import neighbors
 from nilearn import image, masking
-from nilearn._utils.niimg_conversions import ( check_niimg_3d, safe_get_data, )
+from nilearn._utils.niimg_conversions import check_niimg_3d, safe_get_data
 from nilearn.image.resampling import coord_transform
 from joblib import Parallel, delayed
 import nilearn
 import pandas as pd
 
-#Fast searchlight adjacency RSA script using a custom _apply_mask_and_get_affinity.
-#Computes Euclidean and correlation distances between adjacent trials within each sphere.
 
-
-# ------------------------------------------------------------------------
-# Fast affinity function adapted from nilearn
-# ------------------------------------------------------------------------
+# ======== Custom affinity function (adapted from nilearn) ========
 def new_apply_mask_and_get_affinity(seeds, niimg, radius, allow_overlap, mask_img=None):
     """
     Build a sparse sphere-to-voxel affinity matrix.
 
-    seeds      : array-like of shape (n_seeds, 3) in world (mm) coordinates
-    niimg      : Nifti1Image of 4D data (for affine) or None
-    radius     : float, searchlight radius in mm
-    allow_overlap: bool, if False, raises on overlapping spheres
-    mask_img   : Nifti1Image or filename of 3D binary mask
+    seeds         : array (n_seeds, 3) in world (mm) coordinates
+    niimg         : Nifti1Image of 4D data (for affine) or None
+    radius        : searchlight radius in mm
+    allow_overlap : bool, raise error if overlap detected
+    mask_img      : 3D binary mask (Nifti1Image or filename)
 
     Returns:
-      X         : data matrix from mask_img & niimg (unused here)
-      A_sparse  : lil_matrix (n_seeds x n_voxels) boolean
+        X        : data matrix (unused here if niimg=None)
+        A_sparse : sparse matrix (n_seeds x n_voxels) boolean
     """
     seeds = np.asarray(seeds)
     if seeds.ndim == 1:
@@ -112,193 +116,177 @@ def new_apply_mask_and_get_affinity(seeds, niimg, radius, allow_overlap, mask_im
         raise ValueError("Overlap detected between spheres")
 
     return X, A_sparse.tocsr()
+# ========================================
 
-# ------------------------------------------------------------------------
-# Shrinkage & whitening. From Walther 2016 an RSA toolbox descriptions 
-# ------------------------------------------------------------------------
+
+# ======== Shrinkage & whitening (Walther 2016, RSA toolbox) ========
 def compute_shrunk_covariance_and_whitening_matrix(x, return_shrunk_cov=False):
     """
-    Computes the shrunk covariance matrix and its inverse square root for whitening.
-    Optionally returns the shrunk covariance matrix itself (for Mahalanobis).
+    Compute shrunk covariance matrix and its inverse square root (whitening).
+    Optionally return the shrunk covariance itself.
 
-    Args:
-        x (np.array): Data matrix, rows are observations (e.g., beta deviation patterns),
-                      columns are features (e.g., voxels). Shape (t, n).
-        return_shrunk_cov (bool): If True, also returns the shrunk covariance matrix.
-
-    Returns:
-        inv_sigma_sqrt (np.array): Whitening matrix (Sigma_shrunk)^(-1/2). Shape (n, n).
-        sigma_shrunk (np.array, optional): Shrunk covariance matrix. Shape (n, n).
-                                           Returned if return_shrunk_cov is True.
+    x : data matrix, shape (t, n) with t observations × n voxels
     """
-    t, n = x.shape # t measurements by n voxels
+    t, n = x.shape
     if t < 2:
-        print(f"Warning: Not enough samples ({t}) to compute covariance reliably (need at least 2). Returning identity-based matrices.")
+        print(f"Warning: not enough samples ({t}). Returning identity.")
         identity_matrix = np.eye(n)
         if return_shrunk_cov:
-            return identity_matrix, identity_matrix 
+            return identity_matrix, identity_matrix
         else:
             return identity_matrix
 
-    x_demeaned = x - x.mean(0) # Ensure data is demeaned for covariance calculation
-    sample_cov = (1.0 / (t - 1)) * np.dot(np.transpose(x_demeaned), x_demeaned)
+    # Demean data
+    x_demeaned = x - x.mean(0)
+    sample_cov = (1.0 / (t - 1)) * np.dot(x_demeaned.T, x_demeaned)
     prior = np.diag(np.diag(sample_cov))
-    
-    # Simplified shrinkage - this part can be critical and might need tuning/more advanced methods
-    # Using a more stable shrinkage approach based on Ledoit-Wolf intuition without direct sklearn dependency for this snippet
-    # Calculate sum of squared errors for sample_cov relative to prior
-    num = np.sum((sample_cov - prior)**2)
-    # Calculate sum of squared errors for each observation relative to its mean (related to variance of variances)
-    # This is a simplified denominator
-    den = np.sum((x_demeaned**2 - np.diag(sample_cov)[np.newaxis,:])**2) / t
-    
-    shrinkage = 1.0 # Default to full shrinkage (prior) if denominator is zero or num is zero
-    if den > 1e-10 and num > 1e-10 : # Avoid division by zero
+
+    # Shrinkage coefficient
+    num = np.sum((sample_cov - prior) ** 2)
+    den = np.sum((x_demeaned**2 - np.diag(sample_cov)[np.newaxis, :]) ** 2) / t
+    shrinkage = 1.0
+    if den > 1e-10 and num > 1e-10:
         shrinkage = num / den
     shrinkage = np.clip(shrinkage, 0.0, 1.0)
 
-    # Heuristic to increase shrinkage if t is small relative to n (more voxels than samples)
     if t < n:
-        print(f"Warning: Number of deviation samples ({t}) is less than number of voxels ({n}). Increasing shrinkage.")
-        shrinkage = max(shrinkage, 1 - ( (t-1) / (n*1.5) ) ) # Ensure t-1 > 0
+        print(f"Warning: samples ({t}) < voxels ({n}). Increasing shrinkage.")
+        shrinkage = max(shrinkage, 1 - ((t - 1) / (n * 1.5)))
         shrinkage = np.clip(shrinkage, 0.0, 1.0)
 
-
     sigma_shrunk = shrinkage * prior + (1 - shrinkage) * sample_cov
-    
-    epsilon = 1e-7 # Small constant to add to diagonal for numerical stability
+    epsilon = 1e-7
+
+    # Ensure positive definiteness
     try:
-        # Check for positive definiteness before inversion attempt
         np.linalg.cholesky(sigma_shrunk)
     except np.linalg.LinAlgError:
-        #print("Warning: Shrunk covariance not positive definite. Adding epsilon to diagonal.")
-        sigma_shrunk_reg = sigma_shrunk + epsilon * np.eye(n)
-        # Try again with regularized version
-        try:
-          np.linalg.cholesky(sigma_shrunk_reg)
-          sigma_shrunk = sigma_shrunk_reg # Use regularized if it works
-        except np.linalg.LinAlgError:
-          #print("Warning: Regularized shrunk covariance also not positive definite. Using prior for whitening.")
-          sigma_shrunk = prior + epsilon * np.eye(n) # Fallback to regularized prior
+        sigma_shrunk = sigma_shrunk + epsilon * np.eye(n)
 
-    whitening_matrix = np.eye(n) # Initialize to identity as fallback
+    # Whitening matrix
+    whitening_matrix = np.eye(n)
     try:
         evals, evecs = np.linalg.eigh(sigma_shrunk)
-        # Floor eigenvalues to prevent issues with very small or negative ones from numerical precision
-        evals_floored = np.maximum(evals, epsilon) 
+        evals_floored = np.maximum(evals, epsilon)
         evals_sqrt_inv = 1.0 / np.sqrt(evals_floored)
         whitening_matrix = np.dot(evecs * evals_sqrt_inv, evecs.T)
     except np.linalg.LinAlgError as err:
-        print(f"Error during eigendecomposition/inversion of shrunk covariance: {err}")
-        print("Falling back to using whitening matrix based on prior (diagonal matrix).")
-        try:
-            evals_prior, evecs_prior = np.linalg.eigh(prior) # prior is diagonal
-            evals_prior_floored = np.maximum(evals_prior, epsilon)
-            evals_prior_sqrt_inv = 1.0 / np.sqrt(evals_prior_floored)
-            whitening_matrix = np.dot(evecs_prior * evals_prior_sqrt_inv, evecs_prior.T)
-            if return_shrunk_cov:
-                sigma_shrunk = prior # If whitening failed, Mahalanobis on shrunk_cov might also be unstable
-        except np.linalg.LinAlgError:
-            print("Fallback to prior also failed. Using identity for whitening matrix.")
-            whitening_matrix = np.eye(n)
-            if return_shrunk_cov:
-                sigma_shrunk = np.eye(n)
+        print(f"Whitening failed: {err}. Falling back to prior.")
+        whitening_matrix = np.eye(n)
 
     if return_shrunk_cov:
         return whitening_matrix, sigma_shrunk
     else:
         return whitening_matrix
+# ========================================
 
-# ------------------------------------------------------------------------
-# Process one sphere, and get distances bewteen adjacent trials
-# ------------------------------------------------------------------------
+
+# ======== Process one sphere ========
 def process_sphere(idx, tb_VxT, devs, A, n_trials, whiten="On"):
-    vox_inds = A[idx].indices # get the indices of the voxels in this sphere
+    vox_inds = A[idx].indices
     if len(vox_inds) == 0:
         return np.full(n_trials, np.nan), np.full(n_trials, np.nan)
-    b_roi = tb_VxT[vox_inds, :] # get the betas for this sphere
-    dev_roi = devs[:, vox_inds] # get the deviation patterns for this sphere for noise cov
-    
+
+    b_roi = tb_VxT[vox_inds, :]
+    dev_roi = devs[:, vox_inds]
+
     if whiten == "On":
         if dev_roi.shape[0] >= 2:
-            W, _ = compute_shrunk_covariance_and_whitening_matrix(dev_roi, return_shrunk_cov=True) 
+            W, _ = compute_shrunk_covariance_and_whitening_matrix(dev_roi, return_shrunk_cov=True)
         else:
             W = np.eye(len(vox_inds))
-        wb = W.dot(b_roi) # whitened betas    
+        wb = W.dot(b_roi)
     else:
         wb = b_roi
-        
-    data_tv = wb.T # transpose to get trials as rows
-    #euc = np.full(n_trials, np.nan)
-    corrd = np.full(n_trials, np.nan)
-    #diffs = data_tv[1:] - data_tv[:-1]
-    #euc[1:] = np.linalg.norm(diffs, axis=1)
-    for t in range(1, n_trials):
-        r = np.corrcoef(data_tv[t-1], data_tv[t])[0,1]
-        corrd[t] = np.sqrt(2 * (1 - r)) # convert to distance 
-    return corrd, np.full(n_trials, np.nan) #euc # not doing euc for now
 
-# ------------------------------------------------------------------------
-# Main searchlight adjacency RSA pipeline
-# ------------------------------------------------------------------------
+    data_tv = wb.T
+    corrd = np.full(n_trials, np.nan)
+    for t in range(1, n_trials):
+        r = np.corrcoef(data_tv[t - 1], data_tv[t])[0, 1]
+        corrd[t] = np.sqrt(2 * (1 - r))
+    return corrd, np.full(n_trials, np.nan)
+# ========================================
+
+
+# ======== Main searchlight adjacency RSA pipeline ========
 def run_func(subs, in_fn, out_fn, mnn):
     mask_dir = "/Shared/lss_kahwang_hpc/ROIs"
     GLM_dir = "/Shared/lss_kahwang_hpc/data/ThalHi/GLMsingle"
     out_dir = "/Shared/lss_kahwang_hpc/data/ThalHi/GLMsingle/searchlightRSA"
-    #os.makedirs(out_dir, exist_ok=True)
+    # os.makedirs(out_dir, exist_ok=True)
+
     ROI_mask = "Schaefer400+Morel+BG_2.5.nii.gz"
     mask_path = os.path.join(mask_dir, ROI_mask)
     mask_nii = nib.load(mask_path)
     mask_data = mask_nii.get_fdata()
     binary = (mask_data > 0).astype(np.int8)
     binary_mask_img = nilearn.image.new_img_like(mask_nii, binary)
+
     ijk = np.column_stack(np.where(binary == 1))
-    seeds = np.column_stack( coord_transform(ijk[:,0], ijk[:,1], ijk[:,2], mask_nii.affine) )
+    seeds = np.column_stack(
+        coord_transform(ijk[:, 0], ijk[:, 1], ijk[:, 2], mask_nii.affine)
+    )
+
     radius = 8
     allow_overlap = True
     n_jobs = 16
+
     for s in [subs]:
         print(f"\n=== Subject {s} ===")
         subj = os.path.join(GLM_dir, f"sub-{s}")
-        tb_file = os.path.join(subj, "%s_%s.nii.gz" %(s, in_fn))
+        tb_file = os.path.join(subj, "%s_%s.nii.gz" % (s, in_fn))
         if not os.path.exists(tb_file):
-            print("Missing TrialBetas:", tb_file); continue
+            print("Missing TrialBetas:", tb_file)
+            continue
+
         tb_nii = nib.load(tb_file)
         n_trials = tb_nii.shape[3]
         tb_mat = masking.apply_mask(tb_nii, binary_mask_img)
-        tb_VxT = tb_mat.T # voxels x trials
+        tb_VxT = tb_mat.T
         del tb_mat
+
         mean_beta = tb_VxT.mean(axis=1, keepdims=True)
-        devs = (tb_VxT - mean_beta).T # get deviations for noise covariance
-        X, A = new_apply_mask_and_get_affinity( seeds=seeds, niimg=tb_nii, radius=radius, allow_overlap=allow_overlap, mask_img=binary_mask_img )
+        devs = (tb_VxT - mean_beta).T
+
+        X, A = new_apply_mask_and_get_affinity(
+            seeds=seeds,
+            niimg=tb_nii,
+            radius=radius,
+            allow_overlap=allow_overlap,
+            mask_img=binary_mask_img,
+        )
+
         n_seeds = A.shape[0]
         print(f"  # spheres: {n_seeds}")
+
         results = Parallel(n_jobs=n_jobs, verbose=2)(
             delayed(process_sphere)(i, tb_VxT, devs, A, n_trials, whiten=mnn)
             for i in range(n_seeds)
         )
-        corr_adj = np.vstack([c for c,_ in results])
-        #euc_adj = np.vstack([e for _,e in results])
+
+        corr_adj = np.vstack([c for c, _ in results])
+
         if mnn == "On":
             mnn_fn = "T"
-        elif mnn == "Off":
-            mnn_fn = "F"
         else:
             mnn_fn = "F"
-        np.save(os.path.join(out_dir, "%s_sl_adjcorr_%s%s.npy" %(s, out_fn, mnn_fn)), corr_adj)
-        #np.save(os.path.join(out_dir, f"{s}_sl_adjeuc.npy"),  euc_adj)
-        print(f"Saved shapes: corr {corr_adj.shape}")
 
+        np.save(
+            os.path.join(out_dir, "%s_sl_adjcorr_%s%s.npy" % (s, out_fn, mnn_fn)),
+            corr_adj,
+        )
+        print(f"Saved shapes: corr {corr_adj.shape}")
+# ========================================
+
+
+# =================================================================
+# Entrypoint
+# =================================================================
 if __name__ == "__main__":
-    
     subs = input()
-    #subjects = pd.read_csv("/Shared/lss_kahwang_hpc/data/ThalHi/3dDeconvolve_fdpt4/usable_subjs.csv")['sub']
-    #for subs in subjects:
     start = datetime.now()
-    print("Subjectart:", start)
-    # run_func(subs, in_fn = "TrialBetas", out_fn = "WT", mnn="On")
-    run_func(subs, in_fn = "TrialBetas_resRT", out_fn = "resRTWT", mnn="On")
-    # run_func(subs, in_fn = "TrialBetas", out_fn = "WF", mnn="Off")
-    # run_func(subs, in_fn = "TrialBetas_resRT", out_fn = "resRTWF", mnn="Off")
+    print("Subject start:", start)
+    run_func(subs, in_fn="TrialBetas_resRT", out_fn="resRTWT", mnn="On")
     print("End:", datetime.now(), "Duration:", datetime.now() - start)
 
+#end of line
