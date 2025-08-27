@@ -178,10 +178,9 @@ def compute_shrunk_covariance_and_whitening_matrix(x, return_shrunk_cov=False):
         return whitening_matrix, sigma_shrunk
     else:
         return whitening_matrix
-# ========================================
 
 
-# ======== Process one sphere ========
+# ======== Function to process one sphere ========
 def process_sphere(idx, tb_VxT, devs, A, n_trials, whiten="On"):
     vox_inds = A[idx].indices
     if len(vox_inds) == 0:
@@ -205,10 +204,9 @@ def process_sphere(idx, tb_VxT, devs, A, n_trials, whiten="On"):
         r = np.corrcoef(data_tv[t - 1], data_tv[t])[0, 1]
         corrd[t] = np.sqrt(2 * (1 - r))
     return corrd, np.full(n_trials, np.nan)
-# ========================================
 
 
-# ======== Main searchlight adjacency RSA pipeline ========
+# ======== Main searchlight adjacency neural distance pipeline ========
 def run_func(subs, in_fn, out_fn, mnn):
     mask_dir = "/Shared/lss_kahwang_hpc/ROIs"
     GLM_dir = "/Shared/lss_kahwang_hpc/data/ThalHi/GLMsingle"
@@ -276,12 +274,7 @@ def run_func(subs, in_fn, out_fn, mnn):
             corr_adj,
         )
         print(f"Saved shapes: corr {corr_adj.shape}")
-# ========================================
 
-
-# =================================================================
-# Entrypoint
-# =================================================================
 if __name__ == "__main__":
     subs = input()
     start = datetime.now()
