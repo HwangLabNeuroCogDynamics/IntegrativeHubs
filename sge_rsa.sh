@@ -23,13 +23,20 @@ sub=${subjects[${SGE_TASK_ID}-1]}
 echo ${sub}
 
 #### run script
-#echo $sub | python /Users/kahwang/bin/IntegrativeHubs/test_GLMsingle.py
-#echo $sub | python /Users/kahwang/bin/IntegrativeHubs/test_decoding.py
-#echo $sub | python /Users/kahwang/bin/IntegrativeHubs/GLMsingle_rsa.py
-#echo $sub | python /Users/kahwang/bin/IntegrativeHubs/trial_regression.py
+
+# this one is to run GLMsingle
+#echo $sub | python /Users/kahwang/bin/IntegrativeHubs/test_GLMsingle.py   
+
+# then we ran rt_reg.sh to remove RT from trial-wise betas
+
+# this one is to calcuate the trial by trial distance from GLMsingle output for each searhclight sphere. Aka Neural distance
 #echo $sub | python /Users/kahwang/bin/IntegrativeHubs/searchlight_rsa.py
+
+# then run the regression model (switch effects, etc) on the trial-wise distance
 #echo $sub | python /Users/kahwang/bin/IntegrativeHubs/searchlight_regression.py
+
+# other stuff
 #echo $sub | python /Users/kahwang/bin/IntegrativeHubs/distance_modulation.py
-echo $sub | python /Users/kahwang/bin/IntegrativeHubs/thalamocortical_FC.py
+#echo $sub | python /Users/kahwang/bin/IntegrativeHubs/thalamocortical_FC.py
 
 ##

@@ -4,9 +4,7 @@
 # - Writes beta/t-stat maps for each contrast/effect
 ####################################################################
 
-# -----------------------------------------------------------------
-# Environment: avoid threading issues with joblib
-# -----------------------------------------------------------------
+# avoid threading issues with joblib
 import os
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
@@ -23,7 +21,7 @@ from nilearn.masking import unmask
 import re
 
 
-# ask chatgpt to write a clean up script to deal with different model names..
+# asked chatgpt to write a cleanup script to deal with different param names..
 def clean_regressor_name(reg_name):
     clean = reg_name
     # simplify any remaining C(...) contrasts

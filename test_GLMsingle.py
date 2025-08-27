@@ -176,15 +176,6 @@ for sub in [subjects]:
         tb = np.squeeze(typed['betasmd']).T
         masker.inverse_transform(tb).to_filename(os.path.join(outputdir, f"{sub}_TrialBetas.nii.gz"))
 
-        # Voxelwise GLM validation (commented example)
-        # Y = tb
-        # behav = pd.read_csv("/Shared/lss_kahwang_hpc/data/ThalHi/ThalHi_MRI_2020_RTs.csv")
-        # subdf = behav[behav['sub']==sub].reset_index(drop=True)
-        # for c in ["Trial_type","Task"]:
-        #     subdf[c] = subdf[c].astype("category")
-        # voxelwise_glm(Y, subdf, formula="y ~ C(Trial_type, Treatment(reference='Stay'))",
-        #               masker=masker, out_dir=outputdir, prefix=str(sub), n_jobs=24)
-
     except Exception as e:
         # On failure, write out a warning file
         warn_file = os.path.join(outputdir, f"{sub}_warning.txt")

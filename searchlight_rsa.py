@@ -5,9 +5,6 @@
 ####################################################################
 
 import os
-# -----------------------------------------------------------------
-# Environment variables needed when using joblib to avoid threading issues
-# -----------------------------------------------------------------
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
