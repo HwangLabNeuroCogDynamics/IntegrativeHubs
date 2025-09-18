@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 ActFlow on THalHi Switch cost analysis.
 """
@@ -31,16 +30,12 @@ TARGET_ROI_IDS = None
 # Default CV, will run the other half later
 SPLIT_CONN = "second"   # 'first' or 'second' (timeseries connectivity)
 SPLIT_PRED = "first"    # 'first' or 'second' (betas prediction)
-PCA_K = 40
-N_JOBS = 8  # threads; keep BLAS threads = 1 (set above)
-# Placeholder global used by the function
+PCA_K = 40 # use 40 components for PCA reduction, given we have 1700 samples in the ts it should be sufficient
+N_JOBS = 24
 SOURCE_ROI = None
 
-# =========================
-# need to inflate .nii.gz → .nii inline so we can map it in memory
-# =========================
+# need to inflate .nii.gz → .nii inline so we can map it in memory to use it in parallel loops
 print(" Ensuring uncompressed .nii for true memory-mapping...")
-
 ts_p = Path(TIMESERIES_PATH)
 if "".join(ts_p.suffixes[-2:]) == ".nii.gz":
     ts_out = ts_p.with_suffix("").with_suffix(".nii")
@@ -64,28 +59,25 @@ print(f" Betas mmappable path:      {BETAS_PATH}")
 
 ts_img = nib.load(TIMESERIES_PATH, mmap=True)
 be_img = nib.load(BETAS_PATH,      mmap=True)
-TS_PROXY   = ts_img.dataobj
+TS_PROXY   = ts_img.dataobj #use the dataobj proxy for memory mapping in parallel
 BETA_PROXY = be_img.dataobj
 
+# =========================
+# do masking stuff to make sure they align
+# =========================
 print("Resampling ROI mask to timeseries space (nearest-neighbor)…")
-
 # Load original mask (whatever its grid/affine is)
 mask_img_orig = nib.load(ROI_MASK_PATH)
 
 # Use nilearn's resample_to_img with nearest neighbor to preserve label integers
 from nilearn.image import resample_to_img
-mask_img_rs = resample_to_img(
-    source_img=mask_img_orig,
-    target_img=ts_img,                 # resample mask to the timeseries grid
-    interpolation="nearest"            # CRITICAL: preserves discrete labels
-)
+mask_img_rs = resample_to_img( source_img=mask_img_orig, target_img=ts_img, interpolation="nearest" )
 
 # Convert to integer array (nearest gives floats but with exact label values)
 ROI_MASK = np.asanyarray(mask_img_rs.get_fdata(), dtype=np.float32)
 # If any NaNs sneak in at edges, map them to background label 0
 if np.isnan(ROI_MASK).any():
     ROI_MASK = np.nan_to_num(ROI_MASK, nan=0.0)
-
 ROI_MASK = ROI_MASK.astype(np.int32, copy=False)
 
 print(f" Resampled mask shape: {ROI_MASK.shape} (should match TS proxy spatial dims {TS_PROXY.shape[:3]})")
@@ -96,55 +88,57 @@ out_mask_path = Path(OUTPUT_DIR) / "roi_mask_resampled_to_ts.nii.gz"
 out_mask_path.parent.mkdir(parents=True, exist_ok=True)
 nib.save(nib.Nifti1Image(ROI_MASK.astype(np.int16, copy=False), ts_img.affine), str(out_mask_path))
 print(f"Saved resampled mask -> {out_mask_path}")
-
 print(f" TS shape:  {TS_PROXY.shape}  (X,Y,Z,T)")
 print(f" BET shape: {BETA_PROXY.shape} (X,Y,Z,N)")
 print(f" Mask shape:{ROI_MASK.shape}   (X,Y,Z) [int labels]")
 
-# ===== derive ROI ids once ( will exclude source per loop) =====
+# get the list of ROIs for later
 ALL_ROI_IDS = sorted(int(i) for i in np.unique(ROI_MASK) if int(i) != 0)
-if not ALL_ROI_IDS:
-    raise SystemExit("No target ROI ids found. Check ROI mask.")
+
+# for CV pre-compute split indices
+T = TS_PROXY.shape[-1]
+N = BETA_PROXY.shape[-1]
+mid_T = T // 2
+mid_N = N // 2
+
+SPLIT_INDICES = {
+    "first": {"conn": slice(0, mid_T), "pred": slice(0, mid_N)},
+    "second": {"conn": slice(mid_T, T), "pred": slice(mid_N, N)}
+}
 
 # =========================
-# parallel actflow per target 
+# parallel actflow per target function
 # =========================
-def predict_target_roi(target_roi_id: int) -> dict:
+def predict_target_roi(target_roi_id: int, source_roi: int, conn_slice: slice, pred_slice: slice) -> dict:
     """
     returns trialwise Pearson r and split-half noise-ceiling-normalized r.
     """
-    import numpy as np
-    from sklearn.preprocessing import StandardScaler
-    from sklearn.decomposition import PCA
-    from sklearn.linear_model import LinearRegression
 
-    block_ts_conn = np.asarray(TS_PROXY[..., CONN_SLICE],  dtype=np.float32)   # (X,Y,Z,Tc)
-    block_be_pred = np.asarray(BETA_PROXY[..., PRED_SLICE],dtype=np.float32)   # (X,Y,Z,Np)
+    block_ts_conn = np.asarray(TS_PROXY[..., conn_slice],  dtype=np.float32)   
+    block_be_pred = np.asarray(BETA_PROXY[..., pred_slice],dtype=np.float32)   
 
-    src_mask = (ROI_MASK == int(SOURCE_ROI))
+    src_mask = (ROI_MASK == int(source_roi))
     tgt_mask = (ROI_MASK == int(target_roi_id))
 
-    X_conn = block_ts_conn[src_mask, :].T   # (Tc, p)
-    Y_conn = block_ts_conn[tgt_mask, :].T   # (Tc, q)
-    X_pred = block_be_pred[src_mask, :].T   # (Np, p)
-    Y_true = block_be_pred[tgt_mask, :].T   # (Np, q)
+    X_conn = block_ts_conn[src_mask, :].T   
+    Y_conn = block_ts_conn[tgt_mask, :].T   
+    X_pred = block_be_pred[src_mask, :].T   
+    Y_true = block_be_pred[tgt_mask, :].T   
     N_trials, q = Y_true.shape
 
-    # ----- Fit connectivity on the connectivity half -----
+    # estimate FC
     Xc = StandardScaler().fit_transform(X_conn)
     pca = PCA(n_components=int(PCA_K), svd_solver="auto", random_state=0)
-    Z = pca.fit_transform(Xc)
+    Z = pca.fit_transform(Xc) # reduce ts to k components
     reg = LinearRegression()
     reg.fit(Z, Y_conn)
-    B = reg.coef_.T                        # (k, q)
-    P = pca.components_.T                  # (p, k)
-    W = P @ B                              # (p, q)
+    B = reg.coef_.T                        
+    P = pca.components_.T                  
+    W = P @ B     # reconstruct source to target weights                         
 
-    # ----- Predict held-out betas -----
+    # predict
     Xp = StandardScaler().fit_transform(X_pred)
-    Y_hat = Xp @ W                              # (Np, q)
-
-    # ----- Trialwise Pearson r (across voxels) -----
+    Y_hat = Xp @ W                              
     Y_true_c = Y_true - Y_true.mean(axis=1, keepdims=True)
     Y_hat_c  = Y_hat  - Y_hat.mean(axis=1, keepdims=True)
     num   = np.sum(Y_true_c * Y_hat_c, axis=1)
@@ -170,16 +164,15 @@ def predict_target_roi(target_roi_id: int) -> dict:
         diff = mu_A - mu_B
         avg  = 0.5 * (mu_A + mu_B)
         dd = 1
-        vE = np.var(diff, ddof=dd)                 # noise variance (split-diff proxy)
-        vU = np.var(avg,  ddof=dd)                 # signal variance (split-avg proxy)
+        vE = np.var(diff, ddof=dd)  # noise variance (split-diff proxy)
+        vU = np.var(avg,  ddof=dd) # signal variance (split-avg proxy)
         r_nc = (np.sqrt(vU) / np.sqrt(vU + vE)) if (vU + vE) > 1e-20 else np.nan
 
     # Normalize trialwise r by scalar ceiling
     trial_r_norm = trial_r / r_nc
-    #trial_r_norm = np.where(np.isfinite(trial_r_norm), np.clip(trial_r_norm, -1.0, 1.0), np.nan)
 
     return {
-        "source_roi": int(SOURCE_ROI),
+        "source_roi": int(source_roi),
         "target_roi": int(target_roi_id),
         "n_source_vox": int(X_conn.shape[1]),
         "n_target_vox": int(Y_conn.shape[1]),
@@ -190,69 +183,59 @@ def predict_target_roi(target_roi_id: int) -> dict:
         "mean_r_norm": float(np.nanmean(trial_r_norm)),
     }
 
+# =========================
+# Main cross-validation loop
+# =========================
 combined_det_rows = []  
-# two split settings: keep your tested default, plus the reverse CV of second half predicting first half
-split_settings = [(SPLIT_CONN, SPLIT_PRED), ("first", "second")]
-# de-duplicate in case defaults already equal ("first","second")
-seen = set(); split_settings = [s for s in split_settings if (s not in seen and not seen.add(s))]
+split_settings = [("second", "first"), ("first", "second")]  # (conn, pred)
 
-for split_conn_cur, split_pred_cur in split_settings:
+for split_conn, split_pred in split_settings:
     print("\n" + "#"*80)
-    print(f"# Running split setting: CONN={split_conn_cur!r}, PRED={split_pred_cur!r}")
+    print(f"# Running split setting: CONN={split_conn!r}, PRED={split_pred!r}")
     print("#"*80)
+    
+    # Get slice indices for this split
+    conn_slice = SPLIT_INDICES[split_conn]["conn"]
+    pred_slice = SPLIT_INDICES[split_pred]["pred"]
+    
+    print(f" CONN half: {split_conn} -> {conn_slice}")
+    print(f" PRED half: {split_pred} -> {pred_slice}")
 
-    # Compute half-slices for this split (kept identical to your code)
-    T = TS_PROXY.shape[-1]
-    mid_T = T // 2
-    if split_conn_cur == "first":
-        CONN_SLICE = slice(0, mid_T)
-    elif split_conn_cur == "second":
-        CONN_SLICE = slice(mid_T, T)
-    else:
-        raise ValueError("SPLIT_CONN must be 'first' or 'second'.")
-
-    N = BETA_PROXY.shape[-1]
-    mid_N = N // 2
-    if split_pred_cur == "first":
-        PRED_SLICE = slice(0, mid_N)
-    elif split_pred_cur == "second":
-        PRED_SLICE = slice(mid_N, N)
-    else:
-        raise ValueError("SPLIT_PRED must be 'first' or 'second'.")
-
-    print(f" CONN half: {split_conn_cur} -> {CONN_SLICE}")
-    print(f" PRED half: {split_pred_cur} -> {PRED_SLICE}")
-
-    # Loop over requested source ROIs (kept structure)
-    for SOURCE_ROI in SOURCE_ROI_IDS:
-        print(f"Source ROI: {SOURCE_ROI}")
-        # derive targets for THIS source (exclude the source). list of target ROIs change per source.
+    for source_roi in SOURCE_ROI_IDS:
+        print(f"Source ROI: {source_roi}")
+        
+        # Derive targets for THIS source (exclude the source)
         if TARGET_ROI_IDS is None:
-            TARGETS_THIS = [i for i in ALL_ROI_IDS if i != int(SOURCE_ROI)]
+            targets_this = [i for i in ALL_ROI_IDS if i != int(source_roi)]
         else:
-            TARGETS_THIS = [int(i) for i in TARGET_ROI_IDS if int(i) != int(SOURCE_ROI)]
+            targets_this = [int(i) for i in TARGET_ROI_IDS if int(i) != int(source_roi)]
 
         print(" Running over predictions...")
-        # run parallel for source predicting targets
-        results = Parallel(n_jobs=int(N_JOBS), backend="loky", verbose=10)( delayed(predict_target_roi)(int(tid)) for tid in TARGETS_THIS )
-        print(f" Completed {len(results)} targets for source {SOURCE_ROI}.")
+        # Run parallel for source predicting targets
+        results = Parallel(n_jobs=int(N_JOBS), backend="loky", verbose=10)(
+            delayed(predict_target_roi)(int(tid), source_roi, conn_slice, pred_slice) 
+            for tid in targets_this
+        )
+        print(f" Completed {len(results)} targets for source {source_roi}.")
 
+        # Store results
         for r in results:
             tid = int(r["target_roi"])
             tw  = np.asarray(r["trialwise_r"]).ravel()
             twn = np.asarray(r["trialwise_r_norm"]).ravel()
             rl  = r.get("r_nc", np.nan)
+            
             for t_idx, (rv, rn) in enumerate(zip(tw, twn)):
-                if split_pred_cur == "second":
-                    # if predicting second half, then trial index needs to be shifted by mid_N
-                    t_idx += mid_N
+                # Adjust trial index if predicting second half
+                trial_idx = t_idx + mid_N if split_pred == "second" else t_idx
+                
                 combined_det_rows.append({
                     "subject":      subject,
-                    "split_conn":   split_conn_cur,
-                    "split_pred":   split_pred_cur,
-                    "source_roi":   int(SOURCE_ROI),
+                    "split_conn":   split_conn,
+                    "split_pred":   split_pred,
+                    "source_roi":   int(source_roi),
                     "target_roi":   tid,
-                    "trial_index":  t_idx,
+                    "trial_index":  trial_idx,
                     "r":            float(rv),
                     "r_norm":       float(rn),
                     "r_nc":         float(rl),
