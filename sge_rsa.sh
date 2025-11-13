@@ -4,8 +4,8 @@
 #$ -e /Users/kahwang/sge_logs
 #$ -q SEASHORE
 #$ -t 1-59
-#$ -tc 4
-#$ -pe smp 24
+#$ -tc 16
+#$ -pe smp 16
 ##### 1-4740
 ##$ -l mem_free=32G
 #!/bin/bash
@@ -34,6 +34,7 @@ echo ${sub}
 
 # then run the regression model (switch effects, etc) on the trial-wise distance
 #echo $sub | python /Users/kahwang/bin/IntegrativeHubs/searchlight_regression.py
+echo $sub | python /Users/kahwang/bin/IntegrativeHubs/sl_reg.py
 
 # other stuff
 #echo $sub | python /Users/kahwang/bin/IntegrativeHubs/distance_modulation.py
