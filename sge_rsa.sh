@@ -4,7 +4,7 @@
 #$ -e /Users/kahwang/sge_logs
 #$ -q SEASHORE
 #$ -t 1-59
-#$ -tc 16
+#$ -tc 20
 #$ -pe smp 16
 ##### 1-4740
 ##$ -l mem_free=32G

@@ -39,7 +39,7 @@ def clean_regressor_name(reg_name):
 # Paths
 ####################################################################
 data_dir = "/Shared/lss_kahwang_hpc/data/ThalHi/GLMsingle/searchlightRSA"
-out_dir  = "/Shared/lss_kahwang_hpc/data/ThalHi/GLMsingle/searchlightNeuralDistance_replication"
+out_dir  = "/Shared/lss_kahwang_hpc/data/ThalHi/GLMsingle/searchlightNeuralDistance_RTdiff"
 os.makedirs(out_dir, exist_ok=True)
 
 mask_img_path = os.path.join(data_dir, "searchlight_mask.nii.gz")
@@ -82,7 +82,8 @@ def regress_one_sphere(sphere_index, sdf, ds_array, model_syntax):
         p_Stay  = float(freq_tt.get('Stay', 0))
 
         ############################################################
-        # update, get contrast using design-matrix averaging, get design matrix out in one go
+        # update, get contrast using design-matrix averaging (not just as ref level), get design matrix out in one go.
+        # this is how emmeans handel this
         ############################################################
         design_info = model.model.data.design_info
 
@@ -295,8 +296,8 @@ df["task_repeat"]     = df["task_switch"]
 df["probe_repeat"]    = df["probe_switch"]
 
 df["zRT"] = np.where(df["zRT"]==-99, 0, df["zRT"])
-#df["zRT_diff"] = 0
-#df["zRT_diff"][1:] = np.asarray(df["zRT"][1:]) - np.asarray(df["zRT"][:-1])
+df["zRT_diff"] = 0
+df["zRT_diff"][1:] = np.asarray(df["zRT"][1:]) - np.asarray(df["zRT"][:-1])
 
 
 ####################################################################
@@ -306,7 +307,7 @@ if __name__ == "__main__":
     subjects = input("Subject ID: ")
 
     model1 = (
-        "ds ~ zRT + C(Errors, Treatment(reference='correct')) + "
+        "ds ~ zRT_diff + zRT + C(Errors, Treatment(reference='correct')) + "
         "C(Prev_Errors, Treatment(reference='correct')) + "
         "C(hierarchical_switch_type, Treatment(reference='IDS')) * perceptual_change_c + "
         "C(response_repeat) * C(task_repeat) + "
