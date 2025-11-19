@@ -20,6 +20,7 @@ regressors = [
     "main_effect_Errors_ProbeFeatureRTAccuModel_resRTWTT",
     "Prev_Errors_vs_error_ProbeFeatureRTAccuModel_resRTWTT",
     "zRT_ProbeFeatureRTAccuModel_resRTWTT",
+    "zRT_diff_ProbeFeatureRTAccuModel_resRTWTT",
     "probe_repeat_vs_switch_ProbeFeatureRTAccuModel_resRTWTT",
 ]
 
@@ -27,12 +28,12 @@ regressors = [
 # paths
 # -------------------------------
 if os.path.exists("/Shared"):
-    data_dir  = "/Shared/lss_kahwang_hpc/data/ThalHi/GLMsingle/searchlightNeuralDistance_replication"
+    data_dir  = "/Shared/lss_kahwang_hpc/data/ThalHi/GLMsingle/searchlightNeuralDistance_RTdiff"
     mask_path = "/Shared/lss_kahwang_hpc/data/ThalHi/GLMsingle/searchlightRSA/searchlight_mask.nii.gz"
     afni_cmd  = ["singularity", "run", "--cleanenv",
                  "/Shared/lss_kahwang_hpc/opt/afni/afni.sif", "3dMEMA"]
 else:
-    data_dir  = "/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/GLMsingle/searchlightNeuralDistance_replication"
+    data_dir  = "/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/GLMsingle/searchlightNeuralDistance_RTdiff"
     mask_path = "/mnt/nfs/lss/lss_kahwang_hpc/data/ThalHi/GLMsingle/searchlightRSA/searchlight_mask.nii.gz"
     afni_cmd  = ["3dMEMA"]
 
