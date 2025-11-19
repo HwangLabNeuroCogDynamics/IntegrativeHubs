@@ -82,10 +82,10 @@ for reg in regressors:
         cmd.append("-Clustsim")
 
     print(f"======================================================")
-    print(f"🚀 Running MEMA for: {reg}")
+    print(f"Running MEMA for: {reg}")
     print(" ".join(cmd))
     print(f"======================================================")
 
     subprocess.run(cmd, check=True, cwd=group_dir)
 
-    print(f"✓ Finished MEMA: {os.path.join(group_dir, prefix)}\n")
+    print(f"Finished MEMA: {os.path.join(group_dir, prefix)}\n")
