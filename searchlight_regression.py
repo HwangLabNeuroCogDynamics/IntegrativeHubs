@@ -258,6 +258,12 @@ if __name__ == "__main__":
             "C(response_repeat) * C(prev_target_feature_match , Treatment(reference='switch_target_feature')) +"
             "C(probe_repeat)"
         )
-        process_subject(sub, fn="resRTWTT", model_syntax=model1, model_tag="ProbeFeatureRTAccuModel")
+        
+        model2 = (
+            "ds ~ zRT + Errors + C(Trial_type, Treatment(reference='IDS')) + "
+            "C(response_repeat) + "
+            "C(probe_repeat)"
+        )
+        process_subject(sub, fn="HC", model_syntax=model2, model_tag="HCModel")
 
 #end of line
