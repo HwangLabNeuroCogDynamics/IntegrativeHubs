@@ -33,8 +33,8 @@ echo ${sub}
 #echo $sub | python /Users/kahwang/bin/IntegrativeHubs/searchlight_rsa.py
 
 # then run the regression model (switch effects, etc) on the trial-wise distance
-echo $sub | python /Users/kahwang/bin/IntegrativeHubs/searchlight_regression.py
-#echo $sub | python /Users/kahwang/bin/IntegrativeHubs/sl_reg.py
+#echo $sub | python /Users/kahwang/bin/IntegrativeHubs/searchlight_regression.py
+echo $sub | python /Users/kahwang/bin/IntegrativeHubs/sl_reg.py
 
 # other stuff
 #echo $sub | python /Users/kahwang/bin/IntegrativeHubs/distance_modulation.py
