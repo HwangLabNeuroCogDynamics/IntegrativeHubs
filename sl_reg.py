@@ -39,7 +39,7 @@ def clean_regressor_name(reg_name):
 # Paths
 ####################################################################
 data_dir = "/Shared/lss_kahwang_hpc/data/ThalHi/GLMsingle/searchlightRSA"
-out_dir  = "/Shared/lss_kahwang_hpc/data/ThalHi/GLMsingle/searchlightNeuralDistance_RTdiff"
+out_dir  = "/Shared/lss_kahwang_hpc/data/ThalHi/GLMsingle/searchlightNeuralDistance_HCOnly"
 os.makedirs(out_dir, exist_ok=True)
 
 mask_img_path = os.path.join(data_dir, "searchlight_mask.nii.gz")
@@ -316,4 +316,12 @@ if __name__ == "__main__":
         "C(probe_repeat)"
     )
 
-    process_subject(subjects, fn="resRTWTT", model_syntax=model1, model_tag="ProbeFeatureRTAccuModel")
+    model2 = (
+        "ds ~ zRT_diff + zRT + C(Errors, Treatment(reference='correct')) + "
+        "C(hierarchical_switch_type, Treatment(reference='IDS')) + "
+        "C(response_repeat) + "
+        "C(probe_repeat)"
+    )
+
+
+    process_subject(subjects, fn="resRTWTT", model_syntax=model2, model_tag="HCOnly")
