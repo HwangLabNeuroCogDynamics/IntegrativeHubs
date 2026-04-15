@@ -316,6 +316,7 @@ if __name__ == "__main__":
         "C(probe_repeat)"
     )
 
+    # this is control analysis without any PC or task effect
     model2 = (
         "ds ~ zRT_diff + zRT + C(Errors, Treatment(reference='correct')) + "
         "C(hierarchical_switch_type, Treatment(reference='IDS')) + "
